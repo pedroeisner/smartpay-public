@@ -1,2 +1,1 @@
-# smartpay
-Smart Pay
+# Smart Pay

@@ -85,7 +85,7 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- GitHub Token Obfuscation (Prevents auto-revocation) ---
+        // --- GitHub Token Obfuscation ---
         const p1 = "github_pat_";
         const p2 = "11AHGZFVA07hvgXn7YficL_";
         const p3 = "jifFDvXpeNALhupbE0ASZGDcS8wVz1";
@@ -124,6 +124,12 @@
 
         const toBase64 = (str) => btoa(unescape(encodeURIComponent(str)));
         const fromBase64 = (str) => decodeURIComponent(escape(atob(str)));
+        const generateUserHash = async (username) => {
+            const msg = new TextEncoder().encode(username + Date.now() + Math.random());
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msg);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 32);
+        };
 
         const ChatBubble = ({ sender, children }) => (
             <div className={`flex w-full mb-3 fade-in ${sender === 'bot' ? 'justify-start' : 'justify-end'}`}>
@@ -223,6 +229,8 @@
 
             const processInput = async (text) => {
                 const clean = text.trim();
+                
+                // Existing User flow
                 if (step === 0.5) {
                     if (clean.toLowerCase() === 'new') return handleModeSelection('new');
                     addBotMessage("Looking up profile...");
@@ -254,12 +262,34 @@
                             addBotMessage(`Found you, ${clean}! Your wallet and rules are loaded.`);
                         } else addBotMessage("Username not found. Try again or type 'new'.");
                     } catch (e) { addBotMessage("Connection error."); }
-                } else if (step === 1) {
-                    if (!/^[a-zA-Z0-9]+$/.test(clean)) return addBotMessage("Letters and numbers only.");
+                } 
+                
+                // New User: Check Uniqueness
+                else if (step === 1) {
+                    if (!/^[a-zA-Z0-9]+$/.test(clean)) return addBotMessage("Use letters and numbers only.");
+                    
+                    // Checking availability silently
+                    try {
+                        const response = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${CENTRAL_FILE_PATH}`, { 
+                            headers: { "Authorization": `Bearer ${GITHUB_TOKEN}` } 
+                        });
+                        if (response.ok) {
+                            const config = JSON.parse(fromBase64((await response.json()).content));
+                            if (config.users && config.users[clean]) {
+                                addBotMessage(`Sorry, "${clean}" is already taken. Please pick another name.`);
+                                return;
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Config fetch error", e);
+                    }
+
                     setUsername(clean);
                     setStep(2);
                     addBotMessage(`Hi ${clean}! What's your email for the backup?`);
-                } else if (step === 2) {
+                } 
+                
+                else if (step === 2) {
                     if (!clean.includes('@')) return addBotMessage("Invalid email.");
                     setEmail(clean);
                     setStep(3);
@@ -292,7 +322,18 @@
                     const conf = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${CENTRAL_FILE_PATH}`, { headers: { "Authorization": `Bearer ${GITHUB_TOKEN}` } });
                     const cData = await conf.json();
                     const config = JSON.parse(fromBase64(cData.content));
-                    config.users[username] = { ...config.users[username], email, last_updated: new Date().toISOString() };
+                    
+                    if (!config.users) config.users = {};
+                    if (!config.users[username]) {
+                        const newId = await generateUserHash(username);
+                        config.users[username] = { id_rules: newId };
+                    }
+
+                    config.users[username] = { 
+                        ...config.users[username], 
+                        email, 
+                        last_updated: new Date().toISOString() 
+                    };
 
                     await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${CENTRAL_FILE_PATH}`, {
                         method: "PUT",
@@ -340,7 +381,7 @@
                         )}
 
                         {((step === 3) || (step === 5 && userMode === 'existing')) && !isTyping && (
-                            <div className="mt-4 bg-white rounded-2xl p-4 shadow-sm fade-in mx-2">
+                            <div ref={step === 3 || (step === 5 && userMode === 'existing') ? activeStepRef : null} className="mt-4 bg-white rounded-2xl p-4 shadow-sm fade-in mx-2 scroll-mt-24">
                                 <h3 className="font-bold text-gray-900 mb-3 text-lg">Your Wallet</h3>
                                 <div className="space-y-0 divide-y divide-gray-100 mb-4 max-h-60 overflow-y-auto pr-2">
                                     {[...selectedCards, ...POPULAR_CARDS.filter(c => !selectedCards.includes(c))].map(card => (
@@ -354,6 +395,7 @@
                                 </div>
                                 {step === 3 && (
                                     <button onClick={() => {
+                                        if (selectedCards.length === 0) return;
                                         setStep(5);
                                         if (userMode === 'new') {
                                             addBotMessage("Analyzing wallet...");

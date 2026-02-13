@@ -85,7 +85,7 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- GitHub Token Obfuscation (Updated token) ---
+        // --- GitHub Token Obfuscation ---
         const p1 = "github_pat_";
         const p2 = "11AHGZFVA07hvgXn7YficL_";
         const p3 = "jifFDvXpeNALhupbE0ASZGDcS8wVz1";
@@ -96,6 +96,7 @@
         const REPO_NAME = "smartpay-private";
         const PUBLIC_REPO_NAME = "smartpay-public";
         const CENTRAL_FILE_PATH = "init-config.json";
+        const DEFAULT_SHORTCUT_URL = "https://www.icloud.com/shortcuts/93ef174ed75f48fbb1edb7f4df7ae21b";
 
         const POPULAR_CARDS = [
             "Apple Card", "American Express Gold Card", "The Platinum Card from American Express",
@@ -119,6 +120,27 @@
             "Medical": ["doctor", "dentist", "hospital", "physiotherapist", "medical_clinic"],
             "Rent": ["rent", "real_estate_agency"],
             "Everything Else": ["other"]
+        };
+
+        const CARD_BENEFITS = {
+            "American Express Gold Card": { "Dining": { score: 4, reason: "4x points" }, "Groceries": { score: 4, reason: "4x points" }, "Everything Else": { score: 1, reason: "1x points" } },
+            "The Platinum Card from American Express": { "Travel": { score: 5, reason: "5x points" }, "Everything Else": { score: 1, reason: "1x points" } },
+            "Blue Cash Preferred Card from American Express": { "Groceries": { score: 6, reason: "6% cash back" }, "Gas": { score: 3, reason: "3% cash back" }, "Travel": { score: 3, reason: "3% cash back" }, "Everything Else": { score: 1, reason: "1% cash back" } },
+            "Chase Sapphire Preferred Card": { "Dining": { score: 3, reason: "3x points" }, "Travel": { score: 2, reason: "2x points" }, "Everything Else": { score: 1, reason: "1x points" } },
+            "Chase Sapphire Reserve": { "Dining": { score: 3, reason: "3x points" }, "Travel": { score: 3, reason: "3x points" }, "Everything Else": { score: 1, reason: "1x points" } },
+            "Chase Freedom Unlimited": { "Dining": { score: 3, reason: "3% cash back" }, "Drugstores": { score: 3, reason: "3% cash back" }, "Everything Else": { score: 1.5, reason: "1.5% cash back" } },
+            "Chase Freedom Flex": { "Dining": { score: 3, reason: "3% cash back" }, "Groceries": { score: 5, reason: "5% rotating" }, "Everything Else": { score: 1, reason: "1% cash back" } },
+            "Capital One SavorOne": { "Dining": { score: 3, reason: "3% cash back" }, "Entertainment": { score: 3, reason: "3% cash back" }, "Groceries": { score: 3, reason: "3% cash back" }, "Everything Else": { score: 1, reason: "1% cash back" } },
+            "Capital One Venture X": { "Travel": { score: 2, reason: "2x miles" }, "Everything Else": { score: 2, reason: "2x miles" } },
+            "Citi Custom Cash": { "Everything Else": { score: 5, reason: "5% (Top Category)" } },
+            "Citi Double Cash": { "Everything Else": { score: 2, reason: "2% cash back" } },
+            "Wells Fargo Active Cash": { "Everything Else": { score: 2, reason: "2% cash back" } },
+            "Bilt World Elite Mastercard": { "Dining": { score: 3, reason: "3x points" }, "Rent": { score: 1, reason: "1x on Rent" }, "Everything Else": { score: 1, reason: "1x points" } },
+            "Apple Card": { "Everything Else": { score: 2, reason: "2% via Apple Pay" } },
+            "Prime Visa": { "Online Shopping": { score: 5, reason: "5% at Amazon" }, "Groceries": { score: 5, reason: "5% at Whole Foods" }, "Everything Else": { score: 1, reason: "1% cash back" } },
+            "Target RedCard": { "Everything Else": { score: 5, reason: "5% at Target" } },
+            "HealthEquity HSA Visa": { "Medical": { score: 10, reason: "Pre-tax money" }, "Drugstores": { score: 10, reason: "Pre-tax money" } },
+            "Lively HSA Visa": { "Medical": { score: 10, reason: "Pre-tax money" }, "Drugstores": { score: 10, reason: "Pre-tax money" } }
         };
 
         const BASE_CATEGORIES = Object.keys(CATEGORY_TO_TYPES);
@@ -165,7 +187,8 @@
             const [selectedCards, setSelectedCards] = useState([]);
             const [uiCardLogic, setUiCardLogic] = useState({});
             const [initialState, setInitialState] = useState(null);
-            const [shortcutLink, setShortcutLink] = useState("");
+            const [shortcutLink, setShortcutLink] = useState(DEFAULT_SHORTCUT_URL);
+            const [shortcutWhatsNew, setShortcutWhatsNew] = useState("");
             const [shortcutLastModified, setShortcutLastModified] = useState(null);
             const [lastUpdatedUser, setLastUpdatedUser] = useState(null);
             const [inputText, setInputText] = useState("");
@@ -178,7 +201,16 @@
                 const init = async () => {
                     try {
                         const urlResp = await fetch(`https://raw.githubusercontent.com/${REPO_OWNER}/${PUBLIC_REPO_NAME}/refs/heads/main/shortcut-url`);
-                        if (urlResp.ok) setShortcutLink((await urlResp.text()).trim());
+                        if (urlResp.ok) {
+                            const content = await urlResp.text();
+                            try {
+                                const data = JSON.parse(content);
+                                if (data.url) setShortcutLink(data.url);
+                                if (data.whats_new) setShortcutWhatsNew(data.whats_new);
+                            } catch (jsonErr) {
+                                if (content.trim()) setShortcutLink(content.trim());
+                            }
+                        }
                         
                         const commitResp = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${PUBLIC_REPO_NAME}/commits?path=shortcut-url&page=1&per_page=1`);
                         if (commitResp.ok) {
@@ -228,10 +260,47 @@
                 }
             };
 
+            const calculateBestLogic = (cards) => {
+                const logic = {};
+                BASE_CATEGORIES.forEach(category => {
+                    let bestCard = cards[0];
+                    let bestScore = -1;
+                    let bestReason = "1% base";
+                    cards.forEach(card => {
+                        const benefits = CARD_BENEFITS[card];
+                        let score = 1;
+                        let reason = "1% base";
+                        if (benefits) {
+                            if (benefits[category]) {
+                                score = benefits[category].score;
+                                reason = benefits[category].reason;
+                            } else if (benefits["Everything Else"]) {
+                                score = benefits["Everything Else"].score;
+                                reason = benefits["Everything Else"].reason;
+                            }
+                        }
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestCard = card;
+                            bestReason = reason;
+                        }
+                    });
+                    logic[category] = { card: bestCard, reason: bestReason };
+                });
+                return logic;
+            };
+
+            const updateLogic = (category, cardName) => {
+                const benefits = CARD_BENEFITS[cardName];
+                let reason = "1% base";
+                if (benefits) {
+                    reason = benefits[category]?.reason || benefits["Everything Else"]?.reason || "1% base";
+                }
+                setUiCardLogic(prev => ({ ...prev, [category]: { card: cardName, reason } }));
+            };
+
             const processInput = async (text) => {
                 const clean = text.trim().toLowerCase();
-                
-                // Existing User flow
                 if (step === 0.5) {
                     if (clean === 'new') return handleModeSelection('new');
                     addBotMessage("Looking up profile...");
@@ -246,7 +315,6 @@
                             const rPath = user.id_rules.includes('/') ? user.id_rules : `user_rules/rules-${clean}.json`;
                             const rResp = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${rPath}`, { headers: { "Authorization": `Bearer ${GITHUB_TOKEN}` } });
                             const json = JSON.parse(fromBase64((await rResp.json()).content));
-                            
                             const cards = json.cards || [];
                             const rules = json.card_rules || json;
                             const logic = {};
@@ -255,24 +323,17 @@
                                 if (rules[type]) logic[cat] = { card: rules[type].card, reason: rules[type].reason };
                                 else if (cat === "Everything Else" && rules.other) logic[cat] = { card: rules.other.card, reason: rules.other.reason };
                             });
-
                             setSelectedCards(cards);
                             setUiCardLogic(logic);
                             setInitialState({ cards: JSON.stringify(cards.sort()), logic: JSON.stringify(logic) });
                             setStep(5);
-                            addBotMessage(`Found you, ${clean}! Wallet and rules are loaded.`);
+                            addBotMessage(`Found you, ${clean}! Your wallet and rules are loaded.`);
                         } else addBotMessage("Username not found. Try again or type 'new'.");
                     } catch (e) { addBotMessage("Connection error."); }
-                } 
-                
-                // New User: Check Uniqueness
-                else if (step === 1) {
+                } else if (step === 1) {
                     if (!/^[a-zA-Z0-9]+$/.test(clean)) return addBotMessage("Use letters and numbers only.");
-                    
                     try {
-                        const response = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${CENTRAL_FILE_PATH}`, { 
-                            headers: { "Authorization": `Bearer ${GITHUB_TOKEN}` } 
-                        });
+                        const response = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${CENTRAL_FILE_PATH}`, { headers: { "Authorization": `Bearer ${GITHUB_TOKEN}` } });
                         if (response.ok) {
                             const config = JSON.parse(fromBase64((await response.json()).content));
                             if (config.users && config.users[clean]) {
@@ -280,16 +341,11 @@
                                 return;
                             }
                         }
-                    } catch (e) {
-                        console.error("Config fetch error", e);
-                    }
-
+                    } catch (e) {}
                     setUsername(clean);
                     setStep(2);
-                    addBotMessage(`Hi ${clean}! What's your email for backup?`);
-                } 
-                
-                else if (step === 2) {
+                    addBotMessage(`Hi ${clean}! What's your email for the backup?`);
+                } else if (step === 2) {
                     if (!clean.includes('@')) return addBotMessage("Invalid email.");
                     setEmail(clean);
                     setStep(3);
@@ -312,46 +368,29 @@
                     let sha = null;
                     const check = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}`, { headers: { "Authorization": `Bearer ${GITHUB_TOKEN}` } });
                     if (check.ok) sha = (await check.json()).sha;
-
                     await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}`, {
                         method: "PUT",
-                        headers: { "Authorization": `Bearer ${GITHUB_TOKEN}` },
+                        headers: { "Authorization": `Bearer ${GITHUB_TOKEN}`, "Content-Type": "application/json" },
                         body: JSON.stringify({ message: `Update ${username}`, content: toBase64(JSON.stringify(payload, null, 2)), sha })
                     });
-                    
                     const conf = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${CENTRAL_FILE_PATH}`, { headers: { "Authorization": `Bearer ${GITHUB_TOKEN}` } });
                     const cData = await conf.json();
                     const config = JSON.parse(fromBase64(cData.content));
-                    
                     if (!config.users) config.users = {};
                     if (!config.users[username]) {
                         const newId = await generateUserHash(username);
                         config.users[username] = { id_rules: newId };
                     }
-
-                    config.users[username] = { 
-                        ...config.users[username], 
-                        email, 
-                        last_updated: new Date().toISOString() 
-                    };
-
+                    config.users[username] = { ...config.users[username], email, last_updated: new Date().toISOString() };
                     await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${CENTRAL_FILE_PATH}`, {
                         method: "PUT",
-                        headers: { "Authorization": `Bearer ${GITHUB_TOKEN}` },
+                        headers: { "Authorization": `Bearer ${GITHUB_TOKEN}`, "Content-Type": "application/json" },
                         body: JSON.stringify({ message: "Update timestamp", content: toBase64(JSON.stringify(config, null, 2)), sha: cData.sha })
                     });
-
                     setHasSaved(true);
                     addBotMessage("Saved! 🎉");
                     setInitialState({ cards: JSON.stringify([...selectedCards].sort()), logic: JSON.stringify(uiCardLogic) });
                 } catch (e) { addBotMessage("Error saving data."); }
-            };
-
-            const mailLink = () => {
-                const table = Object.entries(uiCardLogic).map(([c, d]) => `- ${c}: ${d.card}`).join('\n');
-                const subject = encodeURIComponent("Smart Pay Setup");
-                const body = encodeURIComponent(`Smart Pay Logic:\n\n${table}\n\nShortcut: ${shortcutLink}`);
-                return `mailto:${email}?subject=${subject}&body=${body}`;
             };
 
             const isShortcutUpdated = () => {
@@ -400,9 +439,7 @@
                                         if (userMode === 'new') {
                                             addBotMessage("Analyzing wallet...");
                                             setTimeout(() => {
-                                                const logic = {};
-                                                BASE_CATEGORIES.forEach(c => logic[c] = { card: selectedCards[0], reason: "1%" });
-                                                setUiCardLogic(logic);
+                                                setUiCardLogic(calculateBestLogic(selectedCards));
                                                 addBotMessage("Rules ready! Tap any to adjust.");
                                             }, 1000);
                                         }
@@ -422,9 +459,7 @@
                                                     <span className="font-semibold text-gray-900">{category}</span>
                                                     <span className="text-[11px] text-gray-400 uppercase font-bold tracking-tight">{data.reason}</span>
                                                 </div>
-                                                <select className="w-full bg-gray-50 text-ios-blue font-bold p-2 rounded-lg text-[15px] outline-none border-none" value={data.card} onChange={(e) => {
-                                                    setUiCardLogic(prev => ({ ...prev, [category]: { ...prev[category], card: e.target.value } }));
-                                                }}>
+                                                <select className="w-full bg-gray-50 text-ios-blue font-bold p-2 rounded-lg text-[15px] outline-none border-none" value={data.card} onChange={(e) => updateLogic(category, e.target.value)}>
                                                     {selectedCards.map(card => <option key={card} value={card}>{card}</option>)}
                                                 </select>
                                             </div>
@@ -437,36 +472,44 @@
                                     )}
                                 </div>
 
-                                {(hasSaved || (userMode === 'existing' && !isShortcutUpdated())) && (
-                                    <div ref={installShortcutRef} className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 fade-in scroll-mt-2">
-                                        <div className="flex items-center mb-6">
-                                            <div className="w-12 h-12 bg-ios-blue rounded-2xl flex items-center justify-center text-white text-2xl mr-4 shadow-md">
-                                                <i className="fas fa-bolt"></i>
-                                            </div>
-                                            <h4 className="font-bold text-gray-900 text-xl tracking-tight">Install Shortcut</h4>
+                                {userMode === 'new' && hasSaved && (
+                                    <div ref={installShortcutRef} className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 fade-in scroll-mt-2 text-center">
+                                        <div className="flex items-center justify-center mb-6">
+                                            <div className="w-12 h-12 bg-ios-blue rounded-2xl flex items-center justify-center text-white text-2xl shadow-md"><i className="fas fa-bolt"></i></div>
                                         </div>
-                                        
-                                        <div className="space-y-3 text-[16px] text-gray-600 mb-6 leading-snug">
+                                        <h4 className="font-bold text-gray-900 text-xl mb-4">Install Shortcut</h4>
+                                        <div className="space-y-3 text-[15px] text-gray-600 mb-6 text-left leading-snug">
                                             <p>1. Click <b>"Get Shortcut"</b> to install.</p>
                                             <p>2. In Shortcuts, go to <b>Library</b> ("1" below), and tap <b>"⚡️ Smart Pay"</b> ("2").</p>
                                         </div>
-
-                                        <div className="mb-8 rounded-3xl overflow-hidden border border-gray-100 shadow-sm">
+                                        <div className="mb-8 rounded-3xl overflow-hidden border border-gray-100 shadow-sm w-1/2 mx-auto">
                                             <img src="https://raw.githubusercontent.com/pedroeisner/smartpay-public/main/images/shortcut-location-screen.png" alt="Guide" className="w-full h-auto" />
                                         </div>
-                                        
                                         <div className="space-y-3">
-                                            <a href={shortcutLink} target="_blank" className="block w-full text-center bg-ios-blue text-white py-4 rounded-2xl font-bold text-[17px] shadow-lg active:opacity-90">Get Shortcut</a>
-                                            <a href={mailLink()} className="block w-full text-center bg-white border border-gray-200 text-ios-blue py-4 rounded-2xl font-bold text-[17px] shadow-sm active:bg-gray-50"><i className="fas fa-envelope mr-2"></i> Send Backup Email</a>
+                                            {shortcutLink ? (
+                                                <a href={shortcutLink} target="_blank" className="block w-full text-center bg-ios-blue text-white py-4 rounded-2xl font-bold text-[17px] shadow-lg active:opacity-90">Get Shortcut</a>
+                                            ) : (
+                                                <button disabled className="block w-full text-center bg-gray-300 text-white py-4 rounded-2xl font-bold text-[17px] cursor-not-allowed">Loading Shortcut...</button>
+                                            )}
                                         </div>
                                     </div>
                                 )}
 
                                 {userMode === 'existing' && isShortcutUpdated() && (
-                                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-ios-blue/30 text-center">
-                                        <p className="text-[15px] text-gray-800 font-medium mb-3">A new version of Smart Pay is available.</p>
+                                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-ios-blue/30 text-center fade-in">
+                                        <p className="text-[15px] text-gray-800 font-bold mb-3">A new version of Smart Pay is available.</p>
+                                        {shortcutWhatsNew && (
+                                            <div className="mb-4 p-3 bg-blue-50 rounded-xl text-left border border-ios-blue/10">
+                                                <p className="text-[11px] font-bold text-ios-blue uppercase mb-1 tracking-wider">What's New</p>
+                                                <p className="text-[13px] text-gray-600 leading-tight">{shortcutWhatsNew}</p>
+                                            </div>
+                                        )}
                                         <p className="text-xs text-gray-500 mb-4">Please install it and choose "Replace" when prompted.</p>
-                                        <a href={shortcutLink} target="_blank" className="block w-full text-center bg-ios-blue text-white py-3 rounded-xl font-bold text-[15px] shadow-sm">Get Shortcut</a>
+                                        {shortcutLink ? (
+                                            <a href={shortcutLink} target="_blank" className="block w-full text-center bg-ios-blue text-white py-3 rounded-xl font-bold text-[15px] shadow-sm">Get Shortcut</a>
+                                        ) : (
+                                            <button disabled className="block w-full text-center bg-gray-300 text-white py-3 rounded-xl font-bold text-[15px] shadow-sm cursor-not-allowed">Loading...</button>
+                                        )}
                                     </div>
                                 )}
                             </div>

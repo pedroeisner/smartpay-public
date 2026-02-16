@@ -96,18 +96,255 @@
         const REPO_NAME = "smartpay-private";
         const PUBLIC_REPO_NAME = "smartpay-public";
         const CENTRAL_FILE_PATH = "init-config.json";
-        const DEFAULT_SHORTCUT_URL = "https://www.icloud.com/shortcuts/93ef174ed75f48fbb1edb7f4df7ae21b";
 
-        const POPULAR_CARDS = [
-            "Apple Card", "American Express Gold Card", "The Platinum Card from American Express",
-            "Blue Cash Preferred Card from American Express", "Chase Sapphire Preferred Card",
-            "Chase Sapphire Reserve", "Chase Freedom Unlimited", "Chase Freedom Flex",
-            "Capital One SavorOne", "Capital One Venture X", "Citi Custom Cash",
-            "Citi Double Cash", "Wells Fargo Active Cash", "Bilt World Elite Mastercard",
-            "Bilt Blue Card", "Bilt Obsidian Card", "Bilt Palladium Card",
-            "Prime Visa", "Target RedCard", "HealthEquity HSA Visa", "Lively HSA Visa",
-            "Fidelity Rewards", "SoFi Credit Card", "PayPal Cashback", "Venmo Credit Card"
-        ];
+        // --- Consolidated Card Database ---
+        const CARDS_DB = {
+            "Apple Card": {
+                popularity: 1,
+                benefits: { "Everything Else": { score: 2, reason: "2% via Apple Pay" } }
+            },
+            "American Express Gold Card": {
+                popularity: 2,
+                benefits: { "Dining": { score: 4, reason: "4x points" }, "Groceries": { score: 4, reason: "4x points" }, "Everything Else": { score: 1, reason: "1x points" } }
+            },
+            "The Platinum Card from American Express": {
+                popularity: 3,
+                benefits: { "Travel": { score: 5, reason: "5x points" }, "Everything Else": { score: 1, reason: "1x points" } }
+            },
+            "Blue Cash Preferred Card from American Express": {
+                popularity: 4,
+                benefits: { "Groceries": { score: 6, reason: "6% cash back" }, "Gas": { score: 3, reason: "3% cash back" }, "Travel": { score: 3, reason: "3% cash back" }, "Everything Else": { score: 1, reason: "1% cash back" } }
+            },
+            "Chase Sapphire Preferred Card": {
+                popularity: 15,
+                benefits: { "Dining": { score: 3, reason: "3x points" }, "Travel": { score: 2, reason: "2x points" }, "Everything Else": { score: 1, reason: "1x points" } }
+            },
+            "Chase Sapphire Reserve": {
+                popularity: 16,
+                benefits: { "Dining": { score: 3, reason: "3x points" }, "Travel": { score: 3, reason: "3x points" }, "Everything Else": { score: 1, reason: "1x points" } }
+            },
+            "Chase Freedom Unlimited": {
+                popularity: 17,
+                benefits: { "Dining": { score: 3, reason: "3% cash back" }, "Drugstores": { score: 3, reason: "3% cash back" }, "Everything Else": { score: 1.5, reason: "1.5% cash back" } }
+            },
+            "Chase Freedom Flex": {
+                popularity: 18,
+                benefits: { "Dining": { score: 3, reason: "3% cash back" }, "Groceries": { score: 5, reason: "5% rotating" }, "Everything Else": { score: 1, reason: "1% cash back" } }
+            },
+            "Capital One SavorOne Cash Rewards Credit Card": {
+                popularity: 36,
+                benefits: { "Dining": { score: 3, reason: "3% cash back" }, "Entertainment": { score: 3, reason: "3% cash back" }, "Groceries": { score: 3, reason: "3% cash back" }, "Everything Else": { score: 1, reason: "1% cash back" } }
+            },
+            "Capital One Venture X Rewards Credit Card": {
+                popularity: 32,
+                benefits: { "Travel": { score: 2, reason: "2x miles" }, "Everything Else": { score: 2, reason: "2x miles" } }
+            },
+            "Citi Custom Cash Card": {
+                popularity: 40,
+                benefits: { "Everything Else": { score: 5, reason: "5% (Top Category)" } }
+            },
+            "Citi Double Cash Card": {
+                popularity: 39,
+                benefits: { "Everything Else": { score: 2, reason: "2% cash back" } }
+            },
+            "Wells Fargo Active Cash Card": {
+                popularity: 47,
+                benefits: { "Everything Else": { score: 2, reason: "2% cash back" } }
+            },
+            "Bilt World Elite Mastercard": {
+                popularity: 49,
+                benefits: { "Dining": { score: 3, reason: "3x points" }, "Rent": { score: 1, reason: "1x on Rent" }, "Everything Else": { score: 1, reason: "1x points" } }
+            },
+            "Prime Visa": {
+                popularity: 51,
+                benefits: { "Online Shopping": { score: 5, reason: "5% at Amazon" }, "Groceries": { score: 5, reason: "5% at Whole Foods" }, "Everything Else": { score: 1, reason: "1% cash back" } }
+            },
+            "Target RedCard": {
+                popularity: 52,
+                benefits: { "Everything Else": { score: 5, reason: "5% at Target" } }
+            },
+            "HealthEquity Visa Healthcare Card": {
+                popularity: 53,
+                benefits: { "Medical": { score: 10, reason: "Pre-tax money" }, "Drugstores": { score: 10, reason: "Pre-tax money" } }
+            },
+            "Lively HSA Visa Debit": {
+                popularity: 54,
+                benefits: { "Medical": { score: 10, reason: "Pre-tax money" }, "Drugstores": { score: 10, reason: "Pre-tax money" } }
+            },
+            "Fidelity Rewards Visa Signature Card": {
+                popularity: 55,
+                benefits: { "Everything Else": { score: 2, reason: "2% cash back" } }
+            },
+            "SoFi Credit Card": {
+                popularity: 56,
+                benefits: { "Everything Else": { score: 2, reason: "2% cash back" } }
+            },
+            "PayPal Cashback Mastercard": {
+                popularity: 57,
+                benefits: { "Online Shopping": { score: 3, reason: "3% via PayPal" }, "Everything Else": { score: 1.5, reason: "1.5% cash back" } }
+            },
+            "Venmo Credit Card": {
+                popularity: 58,
+                benefits: { "Everything Else": { score: 1, reason: "1% base" } }
+            },
+            "Blue Cash Everyday Card from American Express": { 
+                popularity: 5,
+                benefits: { "Groceries": { score: 3, reason: "3% cash back" }, "Online Shopping": { score: 3, reason: "3% cash back" }, "Gas": { score: 3, reason: "3% cash back" }, "Everything Else": { score: 1, reason: "1% cash back" } }
+            },
+            "American Express Green Card": { 
+                popularity: 6,
+                benefits: { "Travel": { score: 3, reason: "3x points" }, "Dining": { score: 3, reason: "3x points" }, "Everything Else": { score: 1, reason: "1x points" } }
+            },
+            "Delta SkyMiles Gold American Express Card": { 
+                popularity: 7,
+                benefits: { "Dining": { score: 2, reason: "2x miles" }, "Groceries": { score: 2, reason: "2x miles" }, "Everything Else": { score: 1, reason: "1x miles" } }
+            },
+            "Delta SkyMiles Platinum American Express Card": { 
+                popularity: 8,
+                benefits: { "Dining": { score: 2, reason: "2x miles" }, "Groceries": { score: 2, reason: "2x miles" }, "Travel": { score: 3, reason: "3x miles (Hotels)" }, "Everything Else": { score: 1, reason: "1x miles" } }
+            },
+            "Delta SkyMiles Reserve American Express Card": { 
+                popularity: 9,
+                benefits: { "Everything Else": { score: 1, reason: "1x miles" } }
+            },
+            "Hilton Honors American Express Card": { 
+                popularity: 10,
+                benefits: { "Dining": { score: 5, reason: "5x points" }, "Groceries": { score: 5, reason: "5x points" }, "Gas": { score: 5, reason: "5x points" }, "Everything Else": { score: 3, reason: "3x points" } }
+            },
+            "Hilton Honors American Express Surpass Card": { 
+                popularity: 11,
+                benefits: { "Dining": { score: 6, reason: "6x points" }, "Groceries": { score: 6, reason: "6x points" }, "Gas": { score: 6, reason: "6x points" }, "Everything Else": { score: 3, reason: "3x points" } }
+            },
+            "Hilton Honors American Express Aspire Card": { 
+                popularity: 12,
+                benefits: { "Dining": { score: 7, reason: "7x points" }, "Travel": { score: 7, reason: "7x points" }, "Everything Else": { score: 3, reason: "3x points" } }
+            },
+            "Marriott Bonvoy Brilliant American Express Card": { 
+                popularity: 13,
+                benefits: { "Dining": { score: 3, reason: "3x points" }, "Travel": { score: 3, reason: "3x points" }, "Everything Else": { score: 2, reason: "2x points" } }
+            },
+            "Marriott Bonvoy Bevy American Express Card": { 
+                popularity: 14,
+                benefits: { "Dining": { score: 4, reason: "4x points" }, "Groceries": { score: 4, reason: "4x points" }, "Everything Else": { score: 2, reason: "2x points" } }
+            },
+            "Ink Business Preferred Credit Card": { 
+                popularity: 19,
+                benefits: { "Travel": { score: 3, reason: "3x points" }, "Everything Else": { score: 1, reason: "1x points" } }
+            },
+            "Ink Business Cash Credit Card": { 
+                popularity: 20,
+                benefits: { "Gas": { score: 2, reason: "2% cash back" }, "Dining": { score: 2, reason: "2% cash back" }, "Everything Else": { score: 1, reason: "1% cash back" } }
+            },
+            "Ink Business Unlimited Credit Card": { 
+                popularity: 21,
+                benefits: { "Everything Else": { score: 1.5, reason: "1.5% cash back" } }
+            },
+            "United Explorer Card": { 
+                popularity: 22,
+                benefits: { "Dining": { score: 2, reason: "2x miles" }, "Travel": { score: 2, reason: "2x miles (Hotel)" }, "Everything Else": { score: 1, reason: "1x miles" } }
+            },
+            "United Quest Card": { 
+                popularity: 23,
+                benefits: { "Dining": { score: 2, reason: "2x miles" }, "Travel": { score: 2, reason: "2x miles" }, "Entertainment": { score: 2, reason: "2x miles" }, "Everything Else": { score: 1, reason: "1x miles" } }
+            },
+            "United Club Infinite Card": { 
+                popularity: 24,
+                benefits: { "Dining": { score: 2, reason: "2x miles" }, "Travel": { score: 2, reason: "2x miles" }, "Everything Else": { score: 1, reason: "1x miles" } }
+            },
+            "Southwest Rapid Rewards Plus Credit Card": { 
+                popularity: 25,
+                benefits: { "Travel": { score: 2, reason: "2x points" }, "Everything Else": { score: 1, reason: "1x points" } }
+            },
+            "Southwest Rapid Rewards Premier Credit Card": { 
+                popularity: 26,
+                benefits: { "Travel": { score: 2, reason: "2x points" }, "Everything Else": { score: 1, reason: "1x points" } }
+            },
+            "Southwest Rapid Rewards Priority Credit Card": { 
+                popularity: 27,
+                benefits: { "Travel": { score: 2, reason: "2x points" }, "Everything Else": { score: 1, reason: "1x points" } }
+            },
+            "British Airways Visa Signature Card": { 
+                popularity: 28,
+                benefits: { "Travel": { score: 2, reason: "2x Avios" }, "Everything Else": { score: 1, reason: "1x Avios" } }
+            },
+            "Aeroplan Credit Card": { 
+                popularity: 29,
+                benefits: { "Groceries": { score: 3, reason: "3x points" }, "Dining": { score: 3, reason: "3x points" }, "Everything Else": { score: 1, reason: "1x points" } }
+            },
+            "World of Hyatt Credit Card": { 
+                popularity: 30,
+                benefits: { "Dining": { score: 2, reason: "2x points" }, "Travel": { score: 2, reason: "2x points" }, "Everything Else": { score: 1, reason: "1x points" } }
+            },
+            "IHG One Rewards Premier Credit Card": { 
+                popularity: 31,
+                benefits: { "Travel": { score: 5, reason: "5x points" }, "Dining": { score: 5, reason: "5x points" }, "Gas": { score: 5, reason: "5x points" }, "Everything Else": { score: 3, reason: "3x points" } }
+            },
+            "Capital One Venture Rewards Credit Card": { 
+                popularity: 33,
+                benefits: { "Everything Else": { score: 2, reason: "2x miles" } }
+            },
+            "Capital One VentureOne Rewards Credit Card": { 
+                popularity: 34,
+                benefits: { "Everything Else": { score: 1.25, reason: "1.25x miles" } }
+            },
+            "Capital One Quicksilver Cash Rewards Credit Card": { 
+                popularity: 35,
+                benefits: { "Everything Else": { score: 1.5, reason: "1.5% cash back" } }
+            },
+            "Capital One Savor Cash Rewards Credit Card": { 
+                popularity: 37,
+                benefits: { "Dining": { score: 3, reason: "3% cash back" }, "Groceries": { score: 3, reason: "3% cash back" }, "Entertainment": { score: 3, reason: "3% cash back" }, "Everything Else": { score: 1, reason: "1% cash back" } }
+            },
+            "Capital One Platinum Credit Card": { 
+                popularity: 38,
+                benefits: {} 
+            },
+            "Citi Strata Premier Card": { 
+                popularity: 41,
+                benefits: { "Dining": { score: 3, reason: "3x points" }, "Groceries": { score: 3, reason: "3x points" }, "Gas": { score: 3, reason: "3x points" }, "Travel": { score: 3, reason: "3x points" }, "Everything Else": { score: 1, reason: "1x points" } }
+            },
+            "Citi / AAdvantage Platinum Select World Elite Mastercard": { 
+                popularity: 42,
+                benefits: { "Dining": { score: 2, reason: "2x miles" }, "Gas": { score: 2, reason: "2x miles" }, "Everything Else": { score: 1, reason: "1x miles" } }
+            },
+            "Costco Anywhere Visa Card by Citi": { 
+                popularity: 43, 
+                benefits: { "Gas": { score: 4, reason: "4% cash back" }, "Dining": { score: 3, reason: "3% cash back" }, "Travel": { score: 3, reason: "3% cash back" }, "Everything Else": { score: 1, reason: "1% cash back" } }
+            },
+            "Discover it Cash Back": { 
+                popularity: 44, 
+                benefits: { "Everything Else": { score: 1, reason: "1% cash back" }, "Groceries": { score: 5, reason: "5% rotating" } }
+            },
+            "Discover it Miles": { 
+                popularity: 45,
+                benefits: { "Everything Else": { score: 1.5, reason: "1.5x miles" } }
+            },
+            "Discover it Chrome": { 
+                popularity: 46,
+                benefits: { "Gas": { score: 2, reason: "2% cash back" }, "Dining": { score: 2, reason: "2% cash back" }, "Everything Else": { score: 1, reason: "1% cash back" } }
+            },
+            "Wells Fargo Autograph Card": { 
+                popularity: 48,
+                benefits: { "Dining": { score: 3, reason: "3x points" }, "Travel": { score: 3, reason: "3x points" }, "Gas": { score: 3, reason: "3x points" }, "Everything Else": { score: 1, reason: "1x points" } }
+            },
+            "U.S. Bank Altitude Go Visa Signature Card": { 
+                popularity: 50,
+                benefits: { "Dining": { score: 4, reason: "4x points" }, "Groceries": { score: 2, reason: "2x points" }, "Gas": { score: 2, reason: "2x points" }, "Everything Else": { score: 1, reason: "1x points" } }
+            },
+            "X1 Card": { 
+                popularity: 59,
+                benefits: { "Everything Else": { score: 2, reason: "2x points" } }
+            },
+            "Gemini Credit Card": { 
+                popularity: 60,
+                benefits: { "Dining": { score: 3, reason: "3% crypto" }, "Groceries": { score: 2, reason: "2% crypto" }, "Everything Else": { score: 1, reason: "1% crypto" } }
+            }
+        };
+
+        // Derive Popular Cards List from DB
+        const POPULAR_CARDS = Object.keys(CARDS_DB)
+            .filter(key => CARDS_DB[key].popularity !== null && CARDS_DB[key].popularity !== undefined)
+            .sort((a, b) => CARDS_DB[a].popularity - CARDS_DB[b].popularity);
 
         const CATEGORY_TO_TYPES = {
             "Dining": ["restaurant", "cafe", "bar", "bakery", "meal_delivery", "night_club", "food"],
@@ -120,27 +357,6 @@
             "Medical": ["doctor", "dentist", "hospital", "physiotherapist", "medical_clinic"],
             "Rent": ["rent", "real_estate_agency"],
             "Everything Else": ["other"]
-        };
-
-        const CARD_BENEFITS = {
-            "American Express Gold Card": { "Dining": { score: 4, reason: "4x points" }, "Groceries": { score: 4, reason: "4x points" }, "Everything Else": { score: 1, reason: "1x points" } },
-            "The Platinum Card from American Express": { "Travel": { score: 5, reason: "5x points" }, "Everything Else": { score: 1, reason: "1x points" } },
-            "Blue Cash Preferred Card from American Express": { "Groceries": { score: 6, reason: "6% cash back" }, "Gas": { score: 3, reason: "3% cash back" }, "Travel": { score: 3, reason: "3% cash back" }, "Everything Else": { score: 1, reason: "1% cash back" } },
-            "Chase Sapphire Preferred Card": { "Dining": { score: 3, reason: "3x points" }, "Travel": { score: 2, reason: "2x points" }, "Everything Else": { score: 1, reason: "1x points" } },
-            "Chase Sapphire Reserve": { "Dining": { score: 3, reason: "3x points" }, "Travel": { score: 3, reason: "3x points" }, "Everything Else": { score: 1, reason: "1x points" } },
-            "Chase Freedom Unlimited": { "Dining": { score: 3, reason: "3% cash back" }, "Drugstores": { score: 3, reason: "3% cash back" }, "Everything Else": { score: 1.5, reason: "1.5% cash back" } },
-            "Chase Freedom Flex": { "Dining": { score: 3, reason: "3% cash back" }, "Groceries": { score: 5, reason: "5% rotating" }, "Everything Else": { score: 1, reason: "1% cash back" } },
-            "Capital One SavorOne": { "Dining": { score: 3, reason: "3% cash back" }, "Entertainment": { score: 3, reason: "3% cash back" }, "Groceries": { score: 3, reason: "3% cash back" }, "Everything Else": { score: 1, reason: "1% cash back" } },
-            "Capital One Venture X": { "Travel": { score: 2, reason: "2x miles" }, "Everything Else": { score: 2, reason: "2x miles" } },
-            "Citi Custom Cash": { "Everything Else": { score: 5, reason: "5% (Top Category)" } },
-            "Citi Double Cash": { "Everything Else": { score: 2, reason: "2% cash back" } },
-            "Wells Fargo Active Cash": { "Everything Else": { score: 2, reason: "2% cash back" } },
-            "Bilt World Elite Mastercard": { "Dining": { score: 3, reason: "3x points" }, "Rent": { score: 1, reason: "1x on Rent" }, "Everything Else": { score: 1, reason: "1x points" } },
-            "Apple Card": { "Everything Else": { score: 2, reason: "2% via Apple Pay" } },
-            "Prime Visa": { "Online Shopping": { score: 5, reason: "5% at Amazon" }, "Groceries": { score: 5, reason: "5% at Whole Foods" }, "Everything Else": { score: 1, reason: "1% cash back" } },
-            "Target RedCard": { "Everything Else": { score: 5, reason: "5% at Target" } },
-            "HealthEquity HSA Visa": { "Medical": { score: 10, reason: "Pre-tax money" }, "Drugstores": { score: 10, reason: "Pre-tax money" } },
-            "Lively HSA Visa": { "Medical": { score: 10, reason: "Pre-tax money" }, "Drugstores": { score: 10, reason: "Pre-tax money" } }
         };
 
         const BASE_CATEGORIES = Object.keys(CATEGORY_TO_TYPES);
@@ -185,10 +401,12 @@
             const [username, setUsername] = useState("");
             const [email, setEmail] = useState("");
             const [selectedCards, setSelectedCards] = useState([]);
+            const [otherCardInput, setOtherCardInput] = useState("");
             const [uiCardLogic, setUiCardLogic] = useState({});
             const [initialState, setInitialState] = useState(null);
-            const [shortcutLink, setShortcutLink] = useState(DEFAULT_SHORTCUT_URL);
+            const [shortcutLink, setShortcutLink] = useState("");
             const [shortcutWhatsNew, setShortcutWhatsNew] = useState("");
+            const [shortcutVersion, setShortcutVersion] = useState("");
             const [shortcutLastModified, setShortcutLastModified] = useState(null);
             const [lastUpdatedUser, setLastUpdatedUser] = useState(null);
             const [inputText, setInputText] = useState("");
@@ -197,48 +415,64 @@
             const installShortcutRef = useRef(null);
             const activeStepRef = useRef(null);
 
+            // Reset hasSaved if changes occur after saving
+            useEffect(() => {
+                if (hasSaved && initialState) {
+                    const currentCards = JSON.stringify([...selectedCards].sort());
+                    const currentLogic = JSON.stringify(uiCardLogic);
+                    if (currentCards !== initialState.cards || currentLogic !== initialState.logic) {
+                        setHasSaved(false);
+                    }
+                }
+            }, [selectedCards, uiCardLogic, hasSaved, initialState]);
+
             useEffect(() => {
                 const init = async () => {
                     try {
-                        const urlResp = await fetch(`https://raw.githubusercontent.com/${REPO_OWNER}/${PUBLIC_REPO_NAME}/refs/heads/main/shortcut-url`);
-                        if (urlResp.ok) {
-                            const content = await urlResp.text();
-                            try {
-                                const data = JSON.parse(content);
-                                if (data.url) setShortcutLink(data.url);
-                                if (data.whats_new) setShortcutWhatsNew(data.whats_new);
-                            } catch (jsonErr) {
-                                if (content.trim()) setShortcutLink(content.trim());
+                        const response = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${CENTRAL_FILE_PATH}`, { headers: { "Authorization": `Bearer ${GITHUB_TOKEN}` } });
+                        if (response.ok) {
+                            const configData = await response.json();
+                            const config = JSON.parse(fromBase64(configData.content));
+                            
+                            // Extract shortcut data
+                            if (config.shortcut_data) {
+                                setShortcutLink(config.shortcut_data.url || "");
+                                setShortcutVersion(config.shortcut_data.version || "");
+                                setShortcutWhatsNew(config.shortcut_data.whats_new || "");
+                                setShortcutLastModified(config.shortcut_data.last_updated || null);
                             }
                         }
-                        
-                        const commitResp = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${PUBLIC_REPO_NAME}/commits?path=shortcut-url&page=1&per_page=1`);
-                        if (commitResp.ok) {
-                            const commits = await commitResp.json();
-                            if (commits?.[0]) setShortcutLastModified(commits[0].commit.committer.date);
-                        }
-                    } catch (e) {}
+                    } catch (e) {
+                        console.error("Failed to fetch shortcut info", e);
+                    }
                 };
                 init();
                 addBotMessage("Hi! I'm the Smart Pay Assistant.");
                 setTimeout(() => addBotMessage("Are you a new user or an existing user?"), 800);
             }, []);
 
+            // Handle Auto-Scrolling
             useEffect(() => {
-                if (step === 5 && userMode === 'new' && activeStepRef.current) {
-                    activeStepRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-                } else {
-                    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+                // If in Step 5 (Logic), prioritize specific refs
+                if (step === 5) {
+                    if (userMode === 'new' && hasSaved && installShortcutRef.current) {
+                        setTimeout(() => installShortcutRef.current.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
+                        return;
+                    }
+                    if (userMode === 'new' && !hasSaved && activeStepRef.current) {
+                        activeStepRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+                        return;
+                    }
+                    if (userMode === 'existing' && activeStepRef.current) {
+                        // For existing, activeStepRef points to Cards which is top
+                        activeStepRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+                        return;
+                    }
                 }
-            }, [messages, isTyping]);
-
-            useEffect(() => {
-                if (hasSaved && installShortcutRef.current) {
-                    setTimeout(() => {
-                        installShortcutRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-                    }, 400);
-                }
-            }, [hasSaved]);
+                
+                // Default: scroll to bottom
+                chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+            }, [messages, isTyping, step, userMode, hasSaved]);
 
             const addBotMessage = (text, delay = 600) => {
                 setIsTyping(true);
@@ -267,7 +501,7 @@
                     let bestScore = -1;
                     let bestReason = "1% base";
                     cards.forEach(card => {
-                        const benefits = CARD_BENEFITS[card];
+                        const benefits = CARDS_DB[card]?.benefits;
                         let score = 1;
                         let reason = "1% base";
                         if (benefits) {
@@ -291,7 +525,7 @@
             };
 
             const updateLogic = (category, cardName) => {
-                const benefits = CARD_BENEFITS[cardName];
+                const benefits = CARDS_DB[cardName]?.benefits;
                 let reason = "1% base";
                 if (benefits) {
                     reason = benefits[category]?.reason || benefits["Everything Else"]?.reason || "1% base";
@@ -315,14 +549,27 @@
                             const rPath = user.id_rules.includes('/') ? user.id_rules : `user_rules/rules-${clean}.json`;
                             const rResp = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${rPath}`, { headers: { "Authorization": `Bearer ${GITHUB_TOKEN}` } });
                             const json = JSON.parse(fromBase64((await rResp.json()).content));
-                            const cards = json.cards || [];
-                            const rules = json.card_rules || json;
+                            
+                            let cards = [];
+                            let rules = {};
+
+                            if (json.cards && Array.isArray(json.cards)) {
+                                cards = json.cards;
+                                rules = json.card_rules || {};
+                            } else {
+                                rules = json;
+                                const cardsSet = new Set();
+                                Object.values(rules).forEach(rule => { if (typeof rule === 'object' && rule.card) cardsSet.add(rule.card); });
+                                cards = Array.from(cardsSet);
+                            }
+
                             const logic = {};
                             BASE_CATEGORIES.forEach(cat => {
                                 const type = CATEGORY_TO_TYPES[cat][0];
                                 if (rules[type]) logic[cat] = { card: rules[type].card, reason: rules[type].reason };
                                 else if (cat === "Everything Else" && rules.other) logic[cat] = { card: rules.other.card, reason: rules.other.reason };
                             });
+
                             setSelectedCards(cards);
                             setUiCardLogic(logic);
                             setInitialState({ cards: JSON.stringify(cards.sort()), logic: JSON.stringify(logic) });
@@ -354,7 +601,10 @@
             };
 
             const confirmLogic = async () => {
+                // If existing user and no changes, we don't need to save again
+                // But UI should have hidden button. Double check.
                 if (userMode === 'existing' && initialState && JSON.stringify([...selectedCards].sort()) === initialState.cards && JSON.stringify(uiCardLogic) === initialState.logic) return;
+                
                 addBotMessage("Saving updates... ☁️");
                 try {
                     const rules = {};
@@ -393,9 +643,58 @@
                 } catch (e) { addBotMessage("Error saving data."); }
             };
 
+            const checkHasChanges = () => {
+                if (!initialState) return true; 
+                const currentCardsStr = JSON.stringify([...selectedCards].sort());
+                const currentLogicStr = JSON.stringify(uiCardLogic);
+                return (currentCardsStr !== initialState.cards || currentLogicStr !== initialState.logic);
+            };
+
+            const mailLink = () => {
+                const table = Object.entries(uiCardLogic).map(([c, d]) => `- ${c}: ${d.card}`).join('\n');
+                const subject = encodeURIComponent("Smart Pay Setup");
+                const body = encodeURIComponent(`Smart Pay Logic for ${username}:\n\n${table}\n\nShortcut: ${shortcutLink}`);
+                return `mailto:${email}?subject=${subject}&body=${body}`;
+            };
+
+            const handleBackupEmail = (e) => {
+                e.preventDefault();
+                const url = mailLink();
+                window.open(url, '_blank'); // Using _blank for better compatibility with mailto
+            };
+
+            const handleGetShortcut = (e) => {
+                e.preventDefault();
+                if (shortcutLink) {
+                    window.open(shortcutLink, '_blank');
+                }
+            };
+
             const isShortcutUpdated = () => {
                 if (!lastUpdatedUser || !shortcutLastModified) return false;
                 return new Date(shortcutLastModified) > new Date(lastUpdatedUser);
+            };
+
+            // --- Handlers ---
+            const toggleCard = (card) => {
+                if (selectedCards.includes(card)) setSelectedCards(prev => prev.filter(c => c !== card));
+                else setSelectedCards(prev => [...prev, card]);
+            };
+
+            const findClosestCard = (input) => {
+                const cleanInput = input.trim().toLowerCase();
+                for (const card of POPULAR_CARDS) {
+                    if (card.toLowerCase().includes(cleanInput)) return card;
+                }
+                return input.trim().replace(/\b\w/g, c => c.toUpperCase());
+            };
+
+            const addOtherCard = () => {
+                if (otherCardInput.trim()) {
+                    const matched = findClosestCard(otherCardInput);
+                    if (!selectedCards.includes(matched)) setSelectedCards(prev => [...prev, matched]);
+                    setOtherCardInput("");
+                }
             };
 
             return (
@@ -406,7 +705,7 @@
 
                     <div className="flex-1 p-4 chat-container">
                         {messages.map((msg, idx) => (
-                            <div key={idx} ref={msg.text?.includes("Analyzing") ? activeStepRef : (idx === messages.length - 1 ? chatEndRef : null)} className={msg.text?.includes("Analyzing") ? "scroll-mt-24" : ""}>
+                            <div key={idx} ref={idx === messages.length - 1 ? chatEndRef : null}>
                                 <ChatBubble sender={msg.sender}>{msg.text}</ChatBubble>
                             </div>
                         ))}
@@ -419,18 +718,27 @@
                             </div>
                         )}
 
-                        {((step === 3) || (step === 5 && userMode === 'existing')) && !isTyping && (
+                        {((step === 3) || (step === 5)) && !isTyping && (
                             <div ref={step === 3 || (step === 5 && userMode === 'existing') ? activeStepRef : null} className="mt-4 bg-white rounded-2xl p-4 shadow-sm fade-in mx-2 scroll-mt-24">
                                 <h3 className="font-bold text-gray-900 mb-3 text-lg">Your Wallet</h3>
                                 <div className="space-y-0 divide-y divide-gray-100 mb-4 max-h-60 overflow-y-auto pr-2">
                                     {[...selectedCards, ...POPULAR_CARDS.filter(c => !selectedCards.includes(c))].map(card => (
                                         <label key={`${card}-${selectedCards.includes(card)}`} className={`flex items-center justify-between py-3 cursor-pointer group card-item ${selectedCards.includes(card) ? 'bg-blue-50/50 px-2 rounded-lg -mx-2' : ''}`}>
                                             <span className="text-[15px] font-medium text-gray-800">{card}</span>
-                                            <input type="checkbox" className="w-5 h-5 rounded-full border-gray-300 text-ios-blue focus:ring-0 ios-checkbox flex-shrink-0" checked={selectedCards.includes(card)} onChange={() => {
-                                                setSelectedCards(prev => prev.includes(card) ? prev.filter(c => c !== card) : [...prev, card]);
-                                            }} />
+                                            <input type="checkbox" className="w-5 h-5 rounded-full border-gray-300 text-ios-blue focus:ring-0 ios-checkbox flex-shrink-0" checked={selectedCards.includes(card)} onChange={() => toggleCard(card)} />
                                         </label>
                                     ))}
+                                </div>
+                                <div className="flex gap-2 mb-4">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Search other cards..." 
+                                        className="flex-1 bg-gray-100 rounded-xl px-4 py-2 text-[15px] outline-none" 
+                                        value={otherCardInput} 
+                                        onChange={(e) => setOtherCardInput(e.target.value)} 
+                                        onKeyDown={(e) => e.key === 'Enter' && addOtherCard()} 
+                                    />
+                                    <button onClick={addOtherCard} className="text-ios-blue font-semibold px-2">Add</button>
                                 </div>
                                 {step === 3 && (
                                     <button onClick={() => {
@@ -450,7 +758,7 @@
 
                         {step === 5 && !isTyping && (
                             <div className="mt-4 pb-10 space-y-4 mx-2">
-                                <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
+                                <div ref={step === 5 && userMode === 'new' && !hasSaved ? activeStepRef : null} className="bg-white rounded-2xl overflow-hidden shadow-sm scroll-mt-24">
                                     <div className="p-4 border-b border-gray-100 font-bold text-lg">Smart Rules</div>
                                     <div className="divide-y divide-gray-100">
                                         {Object.entries(uiCardLogic).map(([category, data]) => (
@@ -465,7 +773,7 @@
                                             </div>
                                         ))}
                                     </div>
-                                    {!hasSaved && (userMode === 'new' || (userMode === 'existing' && initialState && (JSON.stringify([...selectedCards].sort()) !== initialState.cards || JSON.stringify(uiCardLogic) !== initialState.logic))) && (
+                                    {!hasSaved && (userMode === 'new' || (userMode === 'existing' && checkHasChanges())) && (
                                         <div className="p-4 bg-gray-50">
                                             <button onClick={confirmLogic} className="w-full bg-ios-green text-white py-3 rounded-xl font-bold shadow-sm">Confirm & Save</button>
                                         </div>
@@ -473,7 +781,7 @@
                                 </div>
 
                                 {userMode === 'new' && hasSaved && (
-                                    <div ref={installShortcutRef} className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 fade-in scroll-mt-2 text-center">
+                                    <div ref={installShortcutRef} className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 fade-in scroll-mt-4 text-center">
                                         <div className="flex items-center justify-center mb-6">
                                             <div className="w-12 h-12 bg-ios-blue rounded-2xl flex items-center justify-center text-white text-2xl shadow-md"><i className="fas fa-bolt"></i></div>
                                         </div>
@@ -486,11 +794,7 @@
                                             <img src="https://raw.githubusercontent.com/pedroeisner/smartpay-public/main/images/shortcut-location-screen.png" alt="Guide" className="w-full h-auto" />
                                         </div>
                                         <div className="space-y-3">
-                                            {shortcutLink ? (
-                                                <a href={shortcutLink} target="_blank" className="block w-full text-center bg-ios-blue text-white py-4 rounded-2xl font-bold text-[17px] shadow-lg active:opacity-90">Get Shortcut</a>
-                                            ) : (
-                                                <button disabled className="block w-full text-center bg-gray-300 text-white py-4 rounded-2xl font-bold text-[17px] cursor-not-allowed">Loading Shortcut...</button>
-                                            )}
+                                            <button onClick={handleGetShortcut} className="block w-full text-center bg-ios-blue text-white py-4 rounded-2xl font-bold text-[17px] shadow-lg active:opacity-90">Get Shortcut</button>
                                         </div>
                                     </div>
                                 )}
@@ -505,11 +809,7 @@
                                             </div>
                                         )}
                                         <p className="text-xs text-gray-500 mb-4">Please install it and choose "Replace" when prompted.</p>
-                                        {shortcutLink ? (
-                                            <a href={shortcutLink} target="_blank" className="block w-full text-center bg-ios-blue text-white py-3 rounded-xl font-bold text-[15px] shadow-sm">Get Shortcut</a>
-                                        ) : (
-                                            <button disabled className="block w-full text-center bg-gray-300 text-white py-3 rounded-xl font-bold text-[15px] shadow-sm cursor-not-allowed">Loading...</button>
-                                        )}
+                                        <button onClick={handleGetShortcut} className="block w-full text-center bg-ios-blue text-white py-3 rounded-xl font-bold text-[15px] shadow-sm">Get Shortcut</button>
                                     </div>
                                 )}
                             </div>

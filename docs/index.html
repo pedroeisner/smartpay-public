@@ -85,7 +85,7 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- GitHub Token Obfuscation (Prevents auto-revocation) ---
+        // --- GitHub Token Obfuscation ---
         const p1 = "github_pat_";
         const p2 = "11AHGZFVA07hvgXn7YficL_";
         const p3 = "jifFDvXpeNALhupbE0ASZGDcS8wVz1";
@@ -98,18 +98,26 @@
         const CENTRAL_FILE_PATH = "init-config.json";
         const RULES_FILE_PATH = "card_rules.json";
 
-        const CATEGORY_TO_TYPES = {
-            "Dining": ["restaurant", "cafe", "bar", "bakery", "meal_delivery", "night_club", "food"],
-            "Groceries": ["grocery_store", "supermarket", "convenience_store", "liquor_store"],
-            "Travel": ["airport", "lodging", "transit_station", "travel_agency", "car_rental", "parking"],
-            "Gas": ["gas_station"],
-            "Drugstores": ["pharmacy", "drugstore"],
-            "Entertainment": ["movie_theater", "amusement_park", "aquarium", "art_gallery", "bowling_alley", "museum", "stadium", "zoo", "casino"],
-            "Online Shopping": ["electronics_store", "clothing_store", "shoe_store", "shopping_mall", "department_store", "home_goods_store"],
-            "Medical": ["doctor", "dentist", "hospital", "physiotherapist", "medical_clinic"],
-            "Rent": ["rent", "real_estate_agency"],
-            "Everything Else": ["other"]
+        // --- Grouping Configuration ---
+        const DISPLAY_GROUPS = {
+            "Dining": ["Dining", "Restaurant", "Takeout", "Delivery", "Uber Eats", "DoorDash", "GrubHub", "Postmates", "Seamless", "Caviar", "Starbucks", "Panera", "Dunkin"],
+            "Groceries": ["Groceries", "Supermarket", "Whole Foods", "Trader Joe's", "Instacart", "HelloFresh", "Blue Apron", "Meal Kits", "Aldi", "Publix", "Kroger", "Safeway"],
+            "Travel": ["Travel", "Hotel", "Airfare", "Flights", "Airline", "Car Rental", "Cruise", "Expedia", "Priceline", "Booking.com", "Chase Travel", "Portal Hotel", "Amex Travel", "Capital One Travel", "Hertz", "Avis", "Enterprise", "Marriott", "Hilton", "Hyatt"],
+            "Gas": ["Gas", "Fuel", "EV Charging", "Tesla Supercharger", "Exxon", "Mobil", "Shell", "Chevron", "BP", "Texaco", "Sunoco", "Citgo", "Wawa", "Sheetz", "7-Eleven"],
+            "Transit": ["Transit", "Uber", "Lyft", "Rideshare", "Taxi", "Subway", "Metro", "Train", "Bus", "Tolls", "Parking", "Amtrak"],
+            "Shopping": ["Online Shopping", "Retail", "Department Stores", "Clothing", "Electronics", "Best Buy", "Macy's", "Nordstrom", "Bloomingdale's", "Home Depot", "Lowe's", "Nike", "Gap"],
+            "Drugstores": ["Drugstores", "Pharmacy", "Walgreens", "CVS", "Rite Aid", "Duane Reade"],
+            "Entertainment": ["Entertainment", "Streaming", "Movies", "Concerts", "Netflix", "Hulu", "Spotify", "Disney+", "HBO Max", "Apple Music", "YouTube", "Ticketmaster"],
+            "Utilities": ["Utilities", "Internet", "Cable", "Phone", "Wireless", "T-Mobile", "Verizon", "AT&T", "Comcast", "Spectrum"],
+            "Amazon": ["Amazon", "Prime Video"],
+            "Target": ["Target"],
+            "Costco": ["Costco"],
+            "Walmart": ["Walmart"],
+            "Apple": ["Apple", "App Store", "iTunes"],
+            "Rent": ["Rent"]
         };
+
+        const MANDATORY_CATEGORIES = ["Dining", "Groceries", "Travel", "Shopping"];
 
         const CATEGORY_ICONS = {
             "Dining": "🍴",
@@ -117,14 +125,19 @@
             "Travel": "✈️",
             "Gas": "⛽",
             "Drugstores": "💊",
+            "Transit": "🚘", 
+            "Shopping": "🛍️",
             "Entertainment": "🎟️",
-            "Online Shopping": "🛍️",
-            "Medical": "🏥",
+            "Utilities": "📱",
+            "Amazon": "📦",
+            "Target": "🎯",
+            "Costco": "🌭",
+            "Walmart": "🏬",
+            "Apple": "🍎",
             "Rent": "🏠",
-            "Everything Else": "💳"
+            "Base": "💳"
         };
 
-        const BASE_CATEGORIES = Object.keys(CATEGORY_TO_TYPES);
         const AIRLINES = [
             { code: "ua", name: "United Airlines", domain: "united.com" },
             { code: "aa", name: "American Airlines", domain: "aa.com" },
@@ -181,6 +194,7 @@
             // Dynamic Data
             const [cardRulesDB, setCardRulesDB] = useState([]); 
             const [availableCardNames, setAvailableCardNames] = useState([]);
+            const [dbKeys, setDbKeys] = useState(new Set()); // All unique keys in DB
             
             // Sync & State
             const [initialState, setInitialState] = useState(null);
@@ -199,73 +213,168 @@
             const activeStepRef = useRef(null);
             const installShortcutRef = useRef(null);
 
-            useEffect(() => {
-                const init = async () => {
-                    try {
-                        const configResp = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${CENTRAL_FILE_PATH}`, { headers: { "Authorization": `Bearer ${GITHUB_TOKEN}` } });
-                        if (configResp.ok) {
-                            const configData = await configResp.json();
-                            const config = JSON.parse(fromBase64(configData.content));
-                            
-                            if (config.shortcut_data) {
-                                setShortcutLink(config.shortcut_data.url || "");
-                                setShortcutVersion(config.shortcut_data.version || "");
-                                setShortcutWhatsNew(config.shortcut_data.whats_new || "");
-                                setShortcutLastModified(config.shortcut_data.last_updated || null);
-                            }
-                        }
+            // --- Logic Engine (Defined before Effects) ---
 
-                        // Fetch Rules
-                        const rulesResp = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${RULES_FILE_PATH}`, { headers: { "Authorization": `Bearer ${GITHUB_TOKEN}` } });
-                        if (rulesResp.ok) {
-                            const rulesData = await rulesResp.json();
-                            const rules = JSON.parse(fromBase64(rulesData.content));
-                            setCardRulesDB(rules);
-                            setAvailableCardNames([...new Set(rules.map(r => r.card))].sort());
-                        }
-                    } catch (e) {
-                        console.error("Failed to fetch initial data", e);
+            const getRuleForCardAndCategory = (cardName, category, goal) => {
+                const cardRules = cardRulesDB.filter(r => r.card === cardName);
+                let rule = cardRules.find(r => r.key === category);
+                if (!rule) rule = cardRules.find(r => r.key === "Base");
+                
+                if (!rule) return { score: 1, reason: "1% base", key: "Base" };
+
+                const metrics = rule.metrics || {};
+                let result = { score: 1, reason: "1% base", key: rule.key };
+
+                if (metrics[goal]) {
+                    result = { score: metrics[goal].cpd, reason: metrics[goal].reason, key: rule.key };
+                } else if (goal.startsWith('travel_') && metrics['travel_generic']) {
+                    result = { score: metrics['travel_generic'].cpd, reason: metrics['travel_generic'].reason, key: rule.key };
+                } else if (metrics['cash']) {
+                    result = { score: metrics['cash'].cpd, reason: metrics['cash'].reason, key: rule.key };
+                }
+
+                return result;
+            };
+
+            const getBaseWinner = (cards, goal) => {
+                let bestCard = cards[0];
+                let bestScore = -1;
+                let bestReason = "1% base";
+                let bestTrigger = "Base";
+
+                cards.forEach(card => {
+                    const res = getRuleForCardAndCategory(card, "Base", goal);
+                    if (res.score > bestScore) {
+                        bestScore = res.score;
+                        bestCard = card;
+                        bestReason = res.reason;
                     }
-                };
-                init();
-                addBotMessage("Hi! I'm the Smart Pay Assistant.");
-                setTimeout(() => addBotMessage("Are you a new user or an existing user?"), 800);
-            }, []);
+                });
+                
+                return { card: bestCard, score: bestScore, reason: bestReason, trigger: bestTrigger };
+            };
 
-            // Auto-Scrolling Logic
-            useEffect(() => {
-                if (step === 3 && activeStepRef.current) {
-                    activeStepRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-                } else if (step === 4 && activeStepRef.current) {
-                    activeStepRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-                } else if (step === 5 && activeStepRef.current) {
-                     activeStepRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-                } else if (chatEndRef.current) {
-                    chatEndRef.current.scrollIntoView({ behavior: "smooth" });
-                }
-            }, [messages, step, userMode]);
+            const calculateBestLogic = (cards, goal) => {
+                const logic = {};
+                const baseResult = getBaseWinner(cards, goal);
 
-            useEffect(() => {
-                if (hasSaved && installShortcutRef.current) {
-                    setTimeout(() => {
-                        installShortcutRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-                    }, 500);
-                }
-            }, [hasSaved]);
+                Object.entries(DISPLAY_GROUPS).forEach(([groupName, possibleKeys]) => {
+                    let groupWinner = null;
+                    let groupMaxScore = -1;
+                    let groupReason = null;
+                    let groupTrigger = null;
 
-            // React to changes
-            useEffect(() => {
-                if (step === 5 && hasSaved && checkHasChanges()) {
-                    setHasSaved(false);
-                }
-            }, [selectedCards, activeGoal]);
+                    const isMandatory = MANDATORY_CATEGORIES.includes(groupName);
+                    
+                    const matchingCardsInDB = new Set();
+                    cardRulesDB.forEach(rule => {
+                        if (possibleKeys.includes(rule.key)) {
+                            matchingCardsInDB.add(rule.card);
+                        }
+                    });
+                    
+                    if (matchingCardsInDB.size < 2 && !isMandatory) return;
 
-            // Recalculate logic when goal changes
-            useEffect(() => {
-                if (step === 5 && activeGoal && cardRulesDB.length > 0) {
-                    setUiCardLogic(calculateBestLogic(selectedCards, activeGoal));
+                    possibleKeys.forEach(key => {
+                        let keyBestCard = null;
+                        let keyBestScore = -1;
+                        let keyBestReason = "";
+
+                        cards.forEach(card => {
+                            const res = getRuleForCardAndCategory(card, key, goal);
+                            if (res.score > keyBestScore) {
+                                keyBestScore = res.score;
+                                keyBestCard = card;
+                                keyBestReason = res.reason;
+                            }
+                        });
+
+                        if (keyBestScore > groupMaxScore) {
+                            groupMaxScore = keyBestScore;
+                            groupWinner = keyBestCard;
+                            groupReason = keyBestReason;
+                            groupTrigger = key;
+                        }
+                    });
+
+                    if (!groupWinner) {
+                         logic[groupName] = { card: baseResult.card, reason: baseResult.reason, trigger: "Base" };
+                    } else {
+                        if (baseResult.score > groupMaxScore) {
+                             logic[groupName] = { card: baseResult.card, reason: baseResult.reason, trigger: "Base" };
+                        } else {
+                             logic[groupName] = { card: groupWinner, reason: groupReason, trigger: groupTrigger };
+                        }
+                    }
+                    
+                    if (groupName === "Rent") {
+                        const winnerRule = getRuleForCardAndCategory(logic[groupName].card, "Rent", goal);
+                        if (winnerRule.key !== "Rent") {
+                            delete logic["Rent"];
+                        }
+                    }
+                });
+
+                return logic;
+            };
+
+            const updateLogic = (category, cardName) => {
+                const benefits = getRuleForCardAndCategory(cardName, category, activeGoal);
+                setUiCardLogic(prev => ({ ...prev, [category]: { card: cardName, reason: benefits.reason } }));
+            };
+            
+            const checkHasChanges = () => {
+                if (!initialState) return true; 
+                const currentCardsStr = JSON.stringify([...selectedCards].sort());
+                const currentLogicStr = JSON.stringify(uiCardLogic);
+                return (currentCardsStr !== initialState.cards || currentLogicStr !== initialState.logic);
+            };
+
+            const isShortcutUpdated = () => {
+                if (!lastUpdatedUser || !shortcutLastModified) return false;
+                return new Date(shortcutLastModified) > new Date(lastUpdatedUser);
+            };
+
+            // --- Handlers ---
+            const toggleCard = (card) => {
+                if (selectedCards.includes(card)) setSelectedCards(prev => prev.filter(c => c !== card));
+                else setSelectedCards(prev => [...prev, card]);
+            };
+
+            const findClosestCard = (input) => {
+                const cleanInput = input.trim().toLowerCase();
+                for (const card of availableCardNames) {
+                    if (card.toLowerCase().includes(cleanInput)) return card;
                 }
-            }, [activeGoal, selectedCards, step, cardRulesDB]);
+                return input.trim().replace(/\b\w/g, c => c.toUpperCase());
+            };
+
+            const addOtherCard = () => {
+                if (otherCardInput.trim()) {
+                    const matched = findClosestCard(otherCardInput);
+                    if (!selectedCards.includes(matched)) setSelectedCards(prev => [...prev, matched]);
+                    setOtherCardInput("");
+                }
+            };
+            
+            const handleGetShortcut = (e) => {
+                e.preventDefault();
+                if (shortcutLink) {
+                    window.open(shortcutLink, '_blank');
+                }
+            };
+
+            const finishCardSelection = () => {
+                if (selectedCards.length === 0) { alert("Select a card."); return; }
+                setStep(4);
+                addBotMessage("What is your primary goal?");
+            };
+
+            const selectGoal = (goal) => {
+                setActiveGoal(goal);
+                setStep(5);
+                addBotMessage("Generating your optimal strategy...");
+            };
 
             const addBotMessage = (text, delay = 600) => {
                 setIsTyping(true);
@@ -285,50 +394,6 @@
                     setStep(0.5);
                     addBotMessage("Welcome back! Please enter your username.");
                 }
-            };
-
-            const getRuleForCardAndCategory = (cardName, category, goal) => {
-                const cardRules = cardRulesDB.filter(r => r.card === cardName);
-                let rule = cardRules.find(r => r.key === category);
-                if (!rule) rule = cardRules.find(r => r.key === "Base");
-                
-                if (!rule) return { score: 1, reason: "1% base" };
-
-                const metrics = rule.metrics || {};
-                
-                if (metrics[goal]) {
-                    return { score: metrics[goal].cpd, reason: metrics[goal].reason };
-                }
-                
-                if (goal.startsWith('travel_') && metrics['travel_generic']) {
-                    return { score: metrics['travel_generic'].cpd, reason: metrics['travel_generic'].reason };
-                }
-                
-                if (metrics['cash']) {
-                    return { score: metrics['cash'].cpd, reason: metrics['cash'].reason };
-                }
-
-                return { score: 1, reason: "1% base" };
-            };
-
-            const calculateBestLogic = (cards, goal) => {
-                const logic = {};
-                BASE_CATEGORIES.forEach(category => {
-                    let bestCard = cards[0];
-                    let bestScore = -1;
-                    let bestReason = "1% base";
-
-                    cards.forEach(card => {
-                        const res = getRuleForCardAndCategory(card, category, goal);
-                        if (res.score > bestScore) {
-                            bestScore = res.score;
-                            bestCard = card;
-                            bestReason = res.reason;
-                        }
-                    });
-                    logic[category] = { card: bestCard, reason: bestReason };
-                });
-                return logic;
             };
 
             const processInput = async (text) => {
@@ -354,13 +419,13 @@
                             setSelectedCards(loadedCards);
                             setActiveGoal(loadedGoal);
                             
-                            const logic = calculateBestLogic(loadedCards, loadedGoal);
-                            setUiCardLogic(logic);
-                            
-                            setInitialState({ 
-                                cards: JSON.stringify(loadedCards.sort()), 
-                                goal: loadedGoal 
-                            });
+                            if (cardRulesDB.length > 0) {
+                                const logic = calculateBestLogic(loadedCards, loadedGoal);
+                                setUiCardLogic(logic);
+                                setInitialState({ cards: JSON.stringify(loadedCards.sort()), goal: loadedGoal });
+                            } else {
+                                setInitialState({ cards: JSON.stringify(loadedCards.sort()), goal: loadedGoal });
+                            }
 
                             setStep(4); 
                             addBotMessage(`Welcome back, ${clean}! Review your goal setting below.`);
@@ -393,6 +458,31 @@
                 if (userMode === 'existing' && !checkHasChanges()) return;
                 addBotMessage("Saving updates... ☁️");
                 try {
+                    const rules = {};
+                    
+                    // 1. Add Category Rules (UI)
+                    Object.entries(uiCardLogic).forEach(([cat, data]) => {
+                        (DISPLAY_GROUPS[cat] || []).forEach(type => {
+                            rules[type] = { card: data.card, reason: data.reason, match_on: type === 'other' ? 'default' : 'type' };
+                        });
+                    });
+                    
+                    // 2. Add Specific Merchant Rules found in DB for selected cards
+                    selectedCards.forEach(card => {
+                        const merchantRules = cardRulesDB.filter(r => r.card === card && r.type === "Merchant");
+                        merchantRules.forEach(mRule => {
+                            const goalKey = activeGoal;
+                            let reason = "Best card";
+                            
+                            const metrics = mRule.metrics || {};
+                            if (metrics[goalKey]) reason = metrics[goalKey].reason;
+                            else if (goalKey.startsWith('travel_') && metrics['travel_generic']) reason = metrics['travel_generic'].reason;
+                            else if (metrics['cash']) reason = metrics['cash'].reason;
+                            
+                            rules[mRule.key] = { card: card, reason: reason, match_on: "name" };
+                        });
+                    });
+
                     const payload = { cards: selectedCards, active_goal: activeGoal };
                     const path = `user_rules/rules-${username}.json`;
                     
@@ -429,57 +519,87 @@
                 } catch (e) { addBotMessage("Error saving data."); }
             };
 
-            const checkHasChanges = () => {
-                if (!initialState) return true; 
-                const currentCardsStr = JSON.stringify([...selectedCards].sort());
-                return (currentCardsStr !== initialState.cards || activeGoal !== initialState.goal);
+            const handleSend = () => {
+                if (!inputText.trim()) return;
+                setMessages(p => [...p, { sender: 'user', text: inputText }]);
+                processInput(inputText);
+                setInputText("");
             };
 
-            const handleGetShortcut = (e) => {
-                e.preventDefault();
-                if (shortcutLink) {
-                    window.open(shortcutLink, '_blank');
+            // --- Effects ---
+
+            useEffect(() => {
+                const init = async () => {
+                    try {
+                        const configResp = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${CENTRAL_FILE_PATH}`, { headers: { "Authorization": `Bearer ${GITHUB_TOKEN}` } });
+                        if (configResp.ok) {
+                            const configData = await configResp.json();
+                            const config = JSON.parse(fromBase64(configData.content));
+                            
+                            if (config.shortcut_data) {
+                                setShortcutLink(config.shortcut_data.url || "");
+                                setShortcutVersion(config.shortcut_data.version || "");
+                                setShortcutWhatsNew(config.shortcut_data.whats_new || "");
+                                setShortcutLastModified(config.shortcut_data.last_updated || null);
+                            }
+                        }
+
+                        // Fetch Rules
+                        const rulesResp = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${RULES_FILE_PATH}`, { headers: { "Authorization": `Bearer ${GITHUB_TOKEN}` } });
+                        if (rulesResp.ok) {
+                            const rulesData = await rulesResp.json();
+                            const rules = JSON.parse(fromBase64(rulesData.content));
+                            setCardRulesDB(rules);
+                            
+                            const uniqueCards = [...new Set(rules.map(r => r.card))].sort();
+                            const uniqueKeys = new Set(rules.map(r => r.key));
+                            setAvailableCardNames(uniqueCards);
+                            setDbKeys(uniqueKeys);
+                        }
+                    } catch (e) { console.error("Init Error", e); }
+                };
+                init();
+                addBotMessage("Hi! I'm the Smart Pay Assistant.");
+                setTimeout(() => addBotMessage("Are you a new user or an existing user?"), 800);
+            }, []);
+
+            // Auto-Scrolling Logic
+            useEffect(() => {
+                // CRITICAL FIX: If we have saved, do NOT scroll to chat bottom or other steps.
+                if (hasSaved) return;
+
+                if (step === 3 && activeStepRef.current) {
+                    activeStepRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+                } else if (step === 4 && activeStepRef.current) {
+                    activeStepRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+                } else if (step === 5 && activeStepRef.current) {
+                     activeStepRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+                } else if (chatEndRef.current) {
+                    chatEndRef.current.scrollIntoView({ behavior: "smooth" });
                 }
-            };
+            }, [messages, step, userMode, hasSaved]);
 
-            const isShortcutUpdated = () => {
-                if (!lastUpdatedUser || !shortcutLastModified) return false;
-                return new Date(shortcutLastModified) > new Date(lastUpdatedUser);
-            };
-
-            // Handlers
-            const toggleCard = (card) => {
-                if (selectedCards.includes(card)) setSelectedCards(prev => prev.filter(c => c !== card));
-                else setSelectedCards(prev => [...prev, card]);
-            };
-
-            const findClosestCard = (input) => {
-                const cleanInput = input.trim().toLowerCase();
-                for (const card of availableCardNames) {
-                    if (card.toLowerCase().includes(cleanInput)) return card;
+            useEffect(() => {
+                if (hasSaved && installShortcutRef.current) {
+                    setTimeout(() => {
+                        installShortcutRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }, 500);
                 }
-                return input.trim().replace(/\b\w/g, c => c.toUpperCase());
-            };
+            }, [hasSaved]);
 
-            const addOtherCard = () => {
-                if (otherCardInput.trim()) {
-                    const matched = findClosestCard(otherCardInput);
-                    if (!selectedCards.includes(matched)) setSelectedCards(prev => [...prev, matched]);
-                    setOtherCardInput("");
+            // React to changes
+            useEffect(() => {
+                if (step === 5 && hasSaved && checkHasChanges()) {
+                    setHasSaved(false);
                 }
-            };
+            }, [selectedCards, activeGoal]);
 
-            const finishCardSelection = () => {
-                if (selectedCards.length === 0) { alert("Select a card."); return; }
-                setStep(4);
-                addBotMessage("What is your primary goal?");
-            };
-
-            const selectGoal = (goal) => {
-                setActiveGoal(goal);
-                setStep(5);
-                addBotMessage("Generating your optimal strategy...");
-            };
+            // Recalculate logic when goal changes or DB loads
+            useEffect(() => {
+                if (step === 5 && activeGoal && cardRulesDB.length > 0) {
+                    setUiCardLogic(calculateBestLogic(selectedCards, activeGoal));
+                }
+            }, [activeGoal, selectedCards, step, cardRulesDB, dbKeys]);
 
             return (
                 <div className="flex flex-col h-screen max-w-lg mx-auto bg-ios-gray shadow-2xl overflow-hidden relative sm:rounded-xl sm:my-8 sm:h-[90vh] sm:border border-gray-200">
@@ -487,7 +607,7 @@
                         <h1 className="font-bold text-lg text-black mx-auto">Smart Pay</h1>
                     </div>
 
-                    <div className="flex-1 p-4 chat-container">
+                    <div className="flex-1 p-4 pb-32 chat-container">
                         {messages.map((msg, idx) => (
                             <div key={idx} ref={msg.text?.includes("Analyzing") ? activeStepRef : (idx === messages.length - 1 ? chatEndRef : null)} className={msg.text?.includes("Analyzing") ? "scroll-mt-24" : ""}>
                                 <ChatBubble sender={msg.sender}>{msg.text}</ChatBubble>
@@ -582,7 +702,7 @@
                         {/* Step 5: Read-Only Rules Preview */}
                         {step === 5 && !isTyping && (
                             <div className="mt-4 pb-10 space-y-4 mx-2">
-                                <div ref={activeStepRef} className="bg-white rounded-2xl overflow-hidden shadow-sm scroll-mt-24">
+                                <div ref={step === 5 && !hasSaved ? activeStepRef : null} className="bg-white rounded-2xl overflow-hidden shadow-sm scroll-mt-24">
                                     <div className="p-4 border-b border-gray-100 flex justify-between items-center">
                                         <div className="font-bold text-lg">Your Strategy</div>
                                         <div className="flex gap-3">
@@ -591,18 +711,35 @@
                                         </div>
                                     </div>
                                     <div className="divide-y divide-gray-100">
-                                        {Object.entries(uiCardLogic).map(([category, data]) => (
-                                            <div key={category} className="p-4 flex items-start justify-between gap-3">
-                                                <div className="flex items-center gap-2 min-w-[30%]">
-                                                    <span className="text-xl">{CATEGORY_ICONS[category]}</span>
-                                                    <span className="font-semibold text-gray-900 text-[15px]">{category}</span>
+                                        {Object.entries(uiCardLogic).map(([category, data]) => {
+                                            let displayReason = data.reason;
+                                            let showExampleLabel = false;
+                                            let triggerName = "";
+
+                                            if (data.trigger && data.trigger !== category && data.trigger !== "Base") {
+                                                showExampleLabel = true;
+                                                triggerName = data.trigger;
+                                                if (!displayReason.toLowerCase().startsWith(data.trigger.toLowerCase())) {
+                                                    displayReason = `${data.trigger} • ${displayReason}`;
+                                                }
+                                            }
+                                            
+                                            return (
+                                                <div key={category} className="p-4 flex items-start justify-between gap-3">
+                                                    <div className="flex items-center gap-2 min-w-[30%]">
+                                                        <span className="text-xl">{CATEGORY_ICONS[category]}</span>
+                                                        <span className="font-semibold text-gray-900 text-[15px]">{category}</span>
+                                                    </div>
+                                                    <div className="text-right flex-1">
+                                                        {showExampleLabel && (
+                                                            <div className="text-[10px] text-gray-500 italic mb-0.5">Example: {triggerName}</div>
+                                                        )}
+                                                        <div className="font-bold text-ios-blue text-[15px]">{data.card}</div>
+                                                        <div className="text-[11px] text-gray-400 uppercase font-bold tracking-tight">{displayReason}</div>
+                                                    </div>
                                                 </div>
-                                                <div className="text-right flex-1">
-                                                    <div className="font-bold text-ios-blue text-[15px]">{data.card}</div>
-                                                    <div className="text-[11px] text-gray-400 uppercase font-bold tracking-tight">{data.reason}</div>
-                                                </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
 
                                     {!hasSaved && (userMode === 'new' || (userMode === 'existing' && checkHasChanges())) && (
@@ -613,7 +750,7 @@
                                 </div>
 
                                 {userMode === 'new' && hasSaved && (
-                                    <div ref={installShortcutRef} className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 fade-in scroll-mt-4 text-center">
+                                    <div ref={installShortcutRef} className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 fade-in scroll-mt-24 text-center">
                                         <div className="flex items-center justify-center mb-6">
                                             <div className="w-12 h-12 bg-ios-blue rounded-2xl flex items-center justify-center text-white text-2xl shadow-md"><i className="fas fa-bolt"></i></div>
                                         </div>
@@ -648,9 +785,8 @@
                                         <button onClick={handleGetShortcut} className="block w-full text-center bg-ios-blue text-white py-3 rounded-xl font-bold text-[15px] shadow-sm">Get Smart Pay</button>
                                     </div>
                                 )}
-
-                                {/* Spacer to allow scrolling "Install Shortcut" to the top */}
-                                {hasSaved && <div className="h-[70vh]"></div>}
+                                
+                                {hasSaved && <div className="h-[80vh]"></div>}
                             </div>
                         )}
                         <div ref={chatEndRef} />

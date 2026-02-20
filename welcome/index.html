@@ -97,6 +97,8 @@
         const PUBLIC_REPO_NAME = "smartpay-public";
         const CENTRAL_FILE_PATH = "init-config.json";
         const RULES_FILE_PATH = "card_rules.json";
+        
+        const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyYze-koqgqZ7Z2Gr3EPqC348Tkk9Hr9cdZEDLaMUsXheGjrRHezRhSKAoDuVEiHgyImg/exec";
 
         // --- Grouping Configuration ---
         const DISPLAY_GROUPS = {
@@ -221,7 +223,7 @@
             const activeStepRef = useRef(null);
             const installShortcutRef = useRef(null);
 
-            // --- Logic Engine (Defined before Effects) ---
+            // --- Logic Engine ---
 
             const getRuleForCardAndCategory = (cardName, category, goal) => {
                 const cardRules = cardRulesDB.filter(r => r.card === cardName);
@@ -354,13 +356,10 @@
             const addOtherCard = () => {
                 if (otherCardInput.trim()) {
                     const matched = findClosestCard(otherCardInput);
-                    
-                    // Keep track of requested cards that aren't natively supported
                     const isAvailable = availableCardNames.some(c => c.toLowerCase() === matched.toLowerCase());
                     if (!isAvailable && !requestedCards.includes(matched)) {
                         setRequestedCards(prev => [...prev, matched]);
                     }
-
                     if (!selectedCards.includes(matched)) {
                         setSelectedCards(prev => [...prev, matched]);
                         setDisplayCards(prev => prev.includes(matched) ? prev : [matched, ...prev]);
@@ -369,104 +368,31 @@
                 }
             };
             
-            const sendWelcomeEmail = async () => {
-                console.log("Preparing to send email via FormSubmit...");
+            const sendWelcomeEmailViaGAS = async () => {
                 const regularCards = selectedCards.filter(c => !requestedCards.includes(c));
                 
-                const requestedCardsHtml = requestedCards.length > 0 
-                    ? `<ul><li><strong>Requested Cards:</strong> ${requestedCards.join(", ")}</li></ul>` 
-                    : "";
-
-                const htmlContent = `
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <meta charset="utf-8">
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <title>Finish your Smart Pay Setup</title>
-                        <style>
-                            /* Base styles for email clients */
-                            body {
-                                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-                                font-size: 16px;
-                                line-height: 1.5;
-                                color: #333333;
-                                margin: 0;
-                                padding: 20px;
-                            }
-                            
-                            /* Mobile overrides */
-                            @media screen and (max-width: 600px) {
-                                .desktop-button {
-                                    display: none !important;
-                                }
-                                .mobile-button {
-                                    display: block !important;
-                                    max-height: none !important;
-                                    overflow: visible !important;
-                                }
-                            }
-                        </style>
-                    </head>
-                    <body>
-                        <p>Hi ${username},</p>
-                        <p>We've got your preferences saved!</p>
-                        <ul>
-                            <li><strong>Your Cards:</strong> ${regularCards.join(", ")}
-                                ${requestedCardsHtml}
-                            </li>
-                            <li><strong>Reward Goal:</strong> ${activeGoal}</li>
-                        </ul>
-                        <p>To complete your Smart Pay installation and lock in these settings, tap the link below from your iPhone. This will trigger the shortcut to run for the first time.</p>
-                        <div class="desktop-button">
-                            <table border="0" cellpadding="0" cellspacing="0" style="margin-top: 20px;">
-                                <tr>
-                                    <td align="center" bgcolor="#f3f4f6" style="border-radius: 8px;">
-                                        <span style="display: inline-block; padding: 14px 24px; color: #000000; font-weight: 600; text-decoration: none; cursor: default;">
-                                            Open on your iPhone to Setup
-                                        </span>
-                                    </td>
-                                </tr>
-                            </table>
-                        </div>
-                        <div class="mobile-button" style="display: none; max-height: 0px; overflow: hidden; mso-hide: all;">
-                            <table border="0" cellpadding="0" cellspacing="0" style="margin-top: 20px;">
-                                <tr>
-                                    <td align="center" bgcolor="#4162c4" style="border-radius: 8px;">
-                                        <a href="https://pedroeisner.github.io/smartpay-public/shortcut" target="_blank" style="display: inline-block; padding: 14px 24px; color: #ffffff; font-weight: 600; text-decoration: none; border-radius: 8px;">
-                                            ⚡️ Complete Setup
-                                        </a>
-                                    </td>
-                                </tr>
-                            </table>
-                        </div>
-                        <p style="margin-top: 30px;">
-                            Cheers,<br>
-                            Pedro
-                        </p>
-                    </body>
-                    </html>
-                `;
+                // Construct payload as requested by the provided logic/HTML
+                const payload = {
+                    recipient: email,
+                    username: username,
+                    cards: regularCards, // array
+                    requestedCards: requestedCards, // array
+                    goal: activeGoal
+                };
 
                 try {
-                    const response = await fetch("https://formsubmit.co/ajax/pedrojeisner@gmail.com", {
+                    // Using no-cors mode because GAS doesn't handle browser CORS preflights perfectly,
+                    // but it will still trigger the server execution for a form-submit style POST.
+                    await fetch(GAS_WEBAPP_URL, {
                         method: "POST",
+                        mode: "no-cors", 
                         headers: {
-                            "Content-Type": "application/json",
-                            "Accept": "application/json"
+                            "Content-Type": "application/json"
                         },
-                        body: JSON.stringify({
-                            _subject: "Finish setting up Smart Pay ⚡️",
-                            _template: "box", // Suggests a box template to FormSubmit, though raw HTML might be converted to text
-                            Email_HTML: htmlContent // Sending it under a key
-                        })
+                        body: JSON.stringify(payload)
                     });
-                    
-                    const data = await response.json();
-                    console.log("FormSubmit Response:", data);
-                    
-                } catch (emailErr) {
-                    console.error("Failed to send notification email", emailErr);
+                } catch (err) {
+                    console.error("Failed to send GAS email", err);
                 }
             };
 
@@ -476,11 +402,10 @@
                     window.open(shortcutLink, '_blank');
                 }
                 
-                // For new users, send the customized email exactly 10 seconds after click
+                // For new users, send the customized email via GAS exactly 10 seconds after click
                 if (userMode === 'new') {
-                    console.log("10-second email countdown started. Please keep this tab open...");
                     setTimeout(() => {
-                        sendWelcomeEmail();
+                        sendWelcomeEmailViaGAS();
                     }, 10000);
                 }
             };
@@ -501,13 +426,11 @@
                     setAnalyzeText("Analyzing selected cards...");
                     addBotMessage("Generating your optimal strategy...");
 
-                    // Non-linear progress chunks
                     setTimeout(() => { setAnalyzeProgress(30); setAnalyzeText("Cross-referencing merchant rules..."); }, 1000);
                     setTimeout(() => { setAnalyzeProgress(65); setAnalyzeText("Calculating maximum reward yields..."); }, 2500);
                     setTimeout(() => { setAnalyzeProgress(90); setAnalyzeText("Finalizing your strategy..."); }, 3800);
                     setTimeout(() => { setAnalyzeProgress(100); setAnalyzeText("Ready!"); }, 4600);
                     
-                    // Finish analyzing
                     setTimeout(() => { setIsAnalyzing(false); }, 5000);
                 } else {
                     setStep(5);
@@ -550,8 +473,6 @@
                         }
 
                         const data = await response.json();
-                        if (!data.content) throw new Error("Invalid config data");
-                        
                         const config = JSON.parse(fromBase64(data.content));
                         
                         if (config.users?.[clean]) {
@@ -595,7 +516,7 @@
                     } catch (e) {}
                     setUsername(clean);
                     setStep(2);
-                    addBotMessage(`Hi ${clean}! What's your email for the backup?`);
+                    addBotMessage(`Hi ${clean}! What's your **email** for the backup?`);
                 } else if (step === 2) {
                     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                     if (!emailRegex.test(clean)) return addBotMessage("Please enter a valid email address.");
@@ -643,13 +564,6 @@
                 } catch (e) { addBotMessage("Error saving data."); }
             };
 
-            const handleSend = () => {
-                if (!inputText.trim()) return;
-                setMessages(p => [...p, { sender: 'user', text: inputText }]);
-                processInput(inputText);
-                setInputText("");
-            };
-
             // --- Effects ---
 
             useEffect(() => {
@@ -668,13 +582,11 @@
                             }
                         }
 
-                        // Fetch Rules
                         const rulesResp = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${RULES_FILE_PATH}`, { headers: { "Authorization": `Bearer ${GITHUB_TOKEN}` } });
                         if (rulesResp.ok) {
                             const rulesData = await rulesResp.json();
                             const rules = JSON.parse(fromBase64(rulesData.content));
                             setCardRulesDB(rules);
-                            
                             const uniqueCards = [...new Set(rules.map(r => r.card))].sort();
                             const uniqueKeys = new Set(rules.map(r => r.key));
                             setAvailableCardNames(uniqueCards);
@@ -687,9 +599,8 @@
                 setTimeout(() => addBotMessage("Are you a new user or an existing user?"), 800);
             }, []);
 
-            // Auto-Scrolling Logic for typical steps
             useEffect(() => {
-                if (hasSaved) return; // Completely ignore chat auto-scroll if we have saved
+                if (hasSaved) return;
 
                 if (step === 3 && activeStepRef.current) {
                     activeStepRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -702,11 +613,8 @@
                 }
             }, [messages, step, userMode, hasSaved]);
 
-            // Specialized Scroll Logic for the Save execution
             useEffect(() => {
-                // When hasSaved is true, wait for bot to FINISH typing the "Saved!" message
                 if (hasSaved && !isTyping && installShortcutRef.current) {
-                    // Small delay to let the DOM settle the newly rendered chat bubble
                     setTimeout(() => {
                         if (installShortcutRef.current) {
                             installShortcutRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -715,21 +623,18 @@
                 }
             }, [hasSaved, isTyping]);
 
-            // React to changes
             useEffect(() => {
                 if (step === 5 && hasSaved && checkHasChanges()) {
                     setHasSaved(false);
                 }
             }, [selectedCards, activeGoal]);
 
-            // Recalculate logic when goal changes or DB loads
             useEffect(() => {
                 if (step === 5 && activeGoal && cardRulesDB.length > 0) {
                     setUiCardLogic(calculateBestLogic(selectedCards, activeGoal));
                 }
-            }, [activeGoal, selectedCards, step, cardRulesDB, dbKeys]);
+            }, [activeGoal, selectedCards, step, cardRulesDB]);
 
-            // Maintain card list order while in Step 3
             useEffect(() => {
                 if (step === 3) {
                     setDisplayCards([...selectedCards, ...availableCardNames.filter(c => !selectedCards.includes(c))]);
@@ -744,7 +649,7 @@
 
                     <div className="flex-1 p-4 pb-32 chat-container">
                         {messages.map((msg, idx) => (
-                            <div key={idx} ref={msg.text?.includes("Analyzing") ? activeStepRef : (idx === messages.length - 1 ? chatEndRef : null)} className={msg.text?.includes("Analyzing") ? "scroll-mt-24" : ""}>
+                            <div key={idx} ref={idx === messages.length - 1 ? chatEndRef : null}>
                                 <ChatBubble sender={msg.sender}>{msg.text}</ChatBubble>
                             </div>
                         ))}
@@ -788,58 +693,40 @@
                             </div>
                         )}
 
-                        {/* Step 4: Goals */}
                         {step === 4 && !isTyping && (
                             <div ref={activeStepRef} className="mt-4 bg-white rounded-2xl p-4 shadow-sm fade-in mx-2 scroll-mt-24 space-y-4">
                                 <h3 className="font-bold text-gray-900 text-lg mb-2">Select Primary Goal</h3>
-                                
-                                <div 
-                                    onClick={() => { selectGoal('cash'); setTempTravelMode(null); }} 
-                                    className={`p-4 rounded-xl border-2 cursor-pointer transition ${(activeGoal === 'cash' && !tempTravelMode) ? 'border-ios-blue bg-blue-50' : 'border-gray-100 hover:bg-gray-50'}`}
-                                >
+                                <div onClick={() => { selectGoal('cash'); setTempTravelMode(null); }} className={`p-4 rounded-xl border-2 cursor-pointer transition ${(activeGoal === 'cash' && !tempTravelMode) ? 'border-ios-blue bg-blue-50' : 'border-gray-100 hover:bg-gray-50'}`}>
                                     <div className="font-bold text-gray-900">Cashback</div>
                                     <div className="text-xs text-gray-500 mt-1">Simple, guaranteed 1:1 value. Best for paying off statements.</div>
                                 </div>
-
-                                <div 
-                                    onClick={() => { setTempTravelMode('choosing'); if(activeGoal === 'cash') setActiveGoal(''); }} 
-                                    className={`p-4 rounded-xl border-2 cursor-pointer transition ${(activeGoal.startsWith('travel') || tempTravelMode) ? 'border-ios-blue bg-blue-50' : 'border-gray-100 hover:bg-gray-50'}`}
-                                >
+                                <div onClick={() => { setTempTravelMode('choosing'); if(activeGoal === 'cash') setActiveGoal(''); }} className={`p-4 rounded-xl border-2 cursor-pointer transition ${(activeGoal.startsWith('travel') || tempTravelMode) ? 'border-ios-blue bg-blue-50' : 'border-gray-100 hover:bg-gray-50'}`}>
                                     <div className="font-bold text-gray-900">Travel</div>
                                     <div className="text-xs text-gray-500 mt-1">Unlock higher valuations (1.2¢–2.0¢+) by using points for flights and hotels.</div>
                                 </div>
-
                                 {tempTravelMode && (
                                     <div className="pt-2 pl-4 border-l-2 border-gray-100 space-y-3 fade-in">
                                         <p className="text-sm font-semibold text-gray-900">Travel Strategy:</p>
-                                        
                                         <div onClick={() => selectGoal('travel_generic')} className={`p-3 rounded-lg border cursor-pointer ${activeGoal === 'travel_generic' ? 'bg-ios-blue text-white border-ios-blue' : 'bg-gray-50 hover:bg-gray-100 border-transparent text-gray-800'}`}>
                                             <div className="font-bold text-sm">Any Airline (Flexible)</div>
                                             <div className={`text-[11px] mt-1 ${activeGoal === 'travel_generic' ? 'text-blue-100' : 'text-gray-500'}`}>Best value regardless of airline. Suggests highest multipliers.</div>
                                         </div>
-
                                         <div className="p-3 rounded-lg bg-gray-50">
                                             <div className="font-bold text-sm mb-2">Specific Airline (Optimizer)</div>
                                             <div className="flex flex-wrap gap-2">
                                                 {AIRLINES.map(air => (
-                                                    <button 
-                                                        key={air.code} 
-                                                        onClick={() => selectGoal(`travel_${air.code}`)}
-                                                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition ${activeGoal === `travel_${air.code}` ? 'bg-ios-blue text-white border-ios-blue' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-100'}`}
-                                                    >
+                                                    <button key={air.code} onClick={() => selectGoal(`travel_${air.code}`)} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition ${activeGoal === `travel_${air.code}` ? 'bg-ios-blue text-white border-ios-blue' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-100'}`}>
                                                         <img src={`https://www.google.com/s2/favicons?domain=${air.domain}&sz=64`} alt={air.code} className="w-4 h-4 object-contain rounded-full bg-white" />
                                                         {air.name}
                                                     </button>
                                                 ))}
                                             </div>
-                                            <div className="text-[11px] text-gray-500 mt-2">Prioritize cards that transfer directly to this airline.</div>
                                         </div>
                                     </div>
                                 )}
                             </div>
                         )}
 
-                        {/* Step 5: Read-Only Rules Preview */}
                         {step === 5 && (
                             <div className="mt-4 pb-10 space-y-4 mx-2">
                                 {isAnalyzing ? (
@@ -849,7 +736,6 @@
                                         </div>
                                         <h4 className="font-bold text-gray-900 text-lg mb-2">Building Strategy</h4>
                                         <p className="text-[14px] text-gray-500 mb-6 h-5 transition-all duration-300">{analyzeText}</p>
-                                        
                                         <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
                                             <div className="bg-ios-blue h-3 rounded-full transition-all duration-1000 ease-out" style={{ width: `${analyzeProgress}%` }}></div>
                                         </div>
@@ -865,37 +751,19 @@
                                                 </div>
                                             </div>
                                             <div className="divide-y divide-gray-100">
-                                                {Object.entries(uiCardLogic).map(([category, data]) => {
-                                                    let displayReason = data.reason;
-                                                    let showExampleLabel = false;
-                                                    let triggerName = "";
-
-                                                    if (data.trigger && data.trigger !== category && data.trigger !== "Base") {
-                                                        showExampleLabel = true;
-                                                        triggerName = data.trigger;
-                                                        if (!displayReason.toLowerCase().startsWith(data.trigger.toLowerCase())) {
-                                                            displayReason = `${data.trigger} • ${displayReason}`;
-                                                        }
-                                                    }
-                                                    
-                                                    return (
-                                                        <div key={category} className="p-4 flex items-start justify-between gap-3">
-                                                            <div className="flex items-center gap-2 min-w-[30%]">
-                                                                <span className="text-xl">{CATEGORY_ICONS[category]}</span>
-                                                                <span className="font-semibold text-gray-900 text-[15px]">{category}</span>
-                                                            </div>
-                                                            <div className="text-right flex-1">
-                                                                {showExampleLabel && (
-                                                                    <div className="text-[10px] text-gray-500 italic mb-0.5">Example: {triggerName}</div>
-                                                                )}
-                                                                <div className="font-bold text-ios-blue text-[15px]">{data.card}</div>
-                                                                <div className="text-[11px] text-gray-400 uppercase font-bold tracking-tight">{displayReason}</div>
-                                                            </div>
+                                                {Object.entries(uiCardLogic).map(([category, data]) => (
+                                                    <div key={category} className="p-4 flex items-start justify-between gap-3">
+                                                        <div className="flex items-center gap-2 min-w-[30%]">
+                                                            <span className="text-xl">{CATEGORY_ICONS[category]}</span>
+                                                            <span className="font-semibold text-gray-900 text-[15px]">{category}</span>
                                                         </div>
-                                                    );
-                                                })}
+                                                        <div className="text-right flex-1">
+                                                            <div className="font-bold text-ios-blue text-[15px]">{data.card}</div>
+                                                            <div className="text-[11px] text-gray-400 uppercase font-bold tracking-tight">{data.reason}</div>
+                                                        </div>
+                                                    </div>
+                                                ))}
                                             </div>
-
                                             {!hasSaved && (userMode === 'new' || (userMode === 'existing' && checkHasChanges())) && (
                                                 <div className="p-4 bg-gray-50">
                                                     <button onClick={confirmLogic} className="w-full bg-ios-green text-white py-3 rounded-xl font-bold shadow-sm">Confirm & Save</button>
@@ -936,6 +804,7 @@
                                                 <button onClick={handleGetShortcut} className="block w-full text-center bg-ios-blue text-white py-3 rounded-xl font-bold text-[15px] shadow-sm">Get Smart Pay</button>
                                             </div>
                                         )}
+                                        {hasSaved && <div className="h-[90vh]"></div>}
                                     </>
                                 )}
                             </div>
@@ -945,18 +814,8 @@
 
                     {(step === 0.5 || step === 1 || step === 2) && (
                         <div className="p-3 bg-white border-t border-gray-200 flex items-center gap-2">
-                            <input 
-                                type="text" 
-                                className="flex-1 bg-gray-100 rounded-full px-5 py-2.5 outline-none text-[17px]" 
-                                placeholder="Type here..." 
-                                value={inputText}
-                                onChange={e => setInputText(e.target.value)}
-                                onKeyDown={e => e.key === 'Enter' && (setMessages(p => [...p, { sender: 'user', text: inputText }]), processInput(inputText), setInputText(""))}
-                            />
-                            <button 
-                                onClick={() => (setMessages(p => [...p, { sender: 'user', text: inputText }]), processInput(inputText), setInputText(""))}
-                                className="w-10 h-10 bg-ios-blue text-white rounded-full flex items-center justify-center shadow-sm"
-                            >
+                            <input type="text" className="flex-1 bg-gray-100 rounded-full px-5 py-2.5 outline-none text-[17px]" placeholder="Type here..." value={inputText} onChange={e => setInputText(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} />
+                            <button onClick={handleSend} className="w-10 h-10 bg-ios-blue text-white rounded-full flex items-center justify-center shadow-sm">
                                 <i className="fas fa-arrow-up"></i>
                             </button>
                         </div>

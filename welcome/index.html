@@ -189,6 +189,7 @@
             const [username, setUsername] = useState("");
             const [email, setEmail] = useState("");
             const [selectedCards, setSelectedCards] = useState([]);
+            const [requestedCards, setRequestedCards] = useState([]); // Tracks unlisted cards added
             const [activeGoal, setActiveGoal] = useState(""); 
             const [uiCardLogic, setUiCardLogic] = useState({});
             
@@ -209,6 +210,12 @@
             const [inputText, setInputText] = useState("");
             const [otherCardInput, setOtherCardInput] = useState("");
             const [tempTravelMode, setTempTravelMode] = useState(null);
+            const [displayCards, setDisplayCards] = useState([]);
+
+            // Progress Bar States
+            const [isAnalyzing, setIsAnalyzing] = useState(false);
+            const [analyzeProgress, setAnalyzeProgress] = useState(0);
+            const [analyzeText, setAnalyzeText] = useState("");
 
             const chatEndRef = useRef(null);
             const activeStepRef = useRef(null);
@@ -347,15 +354,134 @@
             const addOtherCard = () => {
                 if (otherCardInput.trim()) {
                     const matched = findClosestCard(otherCardInput);
-                    if (!selectedCards.includes(matched)) setSelectedCards(prev => [...prev, matched]);
+                    
+                    // Keep track of requested cards that aren't natively supported
+                    const isAvailable = availableCardNames.some(c => c.toLowerCase() === matched.toLowerCase());
+                    if (!isAvailable && !requestedCards.includes(matched)) {
+                        setRequestedCards(prev => [...prev, matched]);
+                    }
+
+                    if (!selectedCards.includes(matched)) {
+                        setSelectedCards(prev => [...prev, matched]);
+                        setDisplayCards(prev => prev.includes(matched) ? prev : [matched, ...prev]);
+                    }
                     setOtherCardInput("");
                 }
             };
             
+            const sendWelcomeEmail = async () => {
+                console.log("Preparing to send email via FormSubmit...");
+                const regularCards = selectedCards.filter(c => !requestedCards.includes(c));
+                
+                const requestedCardsHtml = requestedCards.length > 0 
+                    ? `<ul><li><strong>Requested Cards:</strong> ${requestedCards.join(", ")}</li></ul>` 
+                    : "";
+
+                const htmlContent = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="utf-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <title>Finish your Smart Pay Setup</title>
+                        <style>
+                            /* Base styles for email clients */
+                            body {
+                                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                                font-size: 16px;
+                                line-height: 1.5;
+                                color: #333333;
+                                margin: 0;
+                                padding: 20px;
+                            }
+                            
+                            /* Mobile overrides */
+                            @media screen and (max-width: 600px) {
+                                .desktop-button {
+                                    display: none !important;
+                                }
+                                .mobile-button {
+                                    display: block !important;
+                                    max-height: none !important;
+                                    overflow: visible !important;
+                                }
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <p>Hi ${username},</p>
+                        <p>We've got your preferences saved!</p>
+                        <ul>
+                            <li><strong>Your Cards:</strong> ${regularCards.join(", ")}
+                                ${requestedCardsHtml}
+                            </li>
+                            <li><strong>Reward Goal:</strong> ${activeGoal}</li>
+                        </ul>
+                        <p>To complete your Smart Pay installation and lock in these settings, tap the link below from your iPhone. This will trigger the shortcut to run for the first time.</p>
+                        <div class="desktop-button">
+                            <table border="0" cellpadding="0" cellspacing="0" style="margin-top: 20px;">
+                                <tr>
+                                    <td align="center" bgcolor="#f3f4f6" style="border-radius: 8px;">
+                                        <span style="display: inline-block; padding: 14px 24px; color: #000000; font-weight: 600; text-decoration: none; cursor: default;">
+                                            Open on your iPhone to Setup
+                                        </span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="mobile-button" style="display: none; max-height: 0px; overflow: hidden; mso-hide: all;">
+                            <table border="0" cellpadding="0" cellspacing="0" style="margin-top: 20px;">
+                                <tr>
+                                    <td align="center" bgcolor="#4162c4" style="border-radius: 8px;">
+                                        <a href="https://pedroeisner.github.io/smartpay-public/shortcut" target="_blank" style="display: inline-block; padding: 14px 24px; color: #ffffff; font-weight: 600; text-decoration: none; border-radius: 8px;">
+                                            ⚡️ Complete Setup
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                        <p style="margin-top: 30px;">
+                            Cheers,<br>
+                            Pedro
+                        </p>
+                    </body>
+                    </html>
+                `;
+
+                try {
+                    const response = await fetch("https://formsubmit.co/ajax/pedrojeisner@gmail.com", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Accept": "application/json"
+                        },
+                        body: JSON.stringify({
+                            _subject: "Finish setting up Smart Pay ⚡️",
+                            _template: "box", // Suggests a box template to FormSubmit, though raw HTML might be converted to text
+                            Email_HTML: htmlContent // Sending it under a key
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    console.log("FormSubmit Response:", data);
+                    
+                } catch (emailErr) {
+                    console.error("Failed to send notification email", emailErr);
+                }
+            };
+
             const handleGetShortcut = (e) => {
                 e.preventDefault();
                 if (shortcutLink) {
                     window.open(shortcutLink, '_blank');
+                }
+                
+                // For new users, send the customized email exactly 10 seconds after click
+                if (userMode === 'new') {
+                    console.log("10-second email countdown started. Please keep this tab open...");
+                    setTimeout(() => {
+                        sendWelcomeEmail();
+                    }, 10000);
                 }
             };
 
@@ -367,8 +493,26 @@
 
             const selectGoal = (goal) => {
                 setActiveGoal(goal);
-                setStep(5);
-                addBotMessage("Generating your optimal strategy...");
+                
+                if (userMode === 'new') {
+                    setStep(5);
+                    setIsAnalyzing(true);
+                    setAnalyzeProgress(0);
+                    setAnalyzeText("Analyzing selected cards...");
+                    addBotMessage("Generating your optimal strategy...");
+
+                    // Non-linear progress chunks
+                    setTimeout(() => { setAnalyzeProgress(30); setAnalyzeText("Cross-referencing merchant rules..."); }, 1000);
+                    setTimeout(() => { setAnalyzeProgress(65); setAnalyzeText("Calculating maximum reward yields..."); }, 2500);
+                    setTimeout(() => { setAnalyzeProgress(90); setAnalyzeText("Finalizing your strategy..."); }, 3800);
+                    setTimeout(() => { setAnalyzeProgress(100); setAnalyzeText("Ready!"); }, 4600);
+                    
+                    // Finish analyzing
+                    setTimeout(() => { setIsAnalyzing(false); }, 5000);
+                } else {
+                    setStep(5);
+                    addBotMessage("Generating your optimal strategy...");
+                }
             };
 
             const addBotMessage = (text, delay = 600) => {
@@ -453,7 +597,8 @@
                     setStep(2);
                     addBotMessage(`Hi ${clean}! What's your email for the backup?`);
                 } else if (step === 2) {
-                    if (!clean.includes('@')) return addBotMessage("Invalid email.");
+                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                    if (!emailRegex.test(clean)) return addBotMessage("Please enter a valid email address.");
                     setEmail(clean);
                     setStep(3);
                     addBotMessage("Which cards do you have?");
@@ -488,7 +633,7 @@
                         headers: { "Authorization": `Bearer ${GITHUB_TOKEN}`, "Content-Type": "application/json" },
                         body: JSON.stringify({ message: `Update user ${username}`, content: toBase64(JSON.stringify(config, null, 2)), sha: cData.sha })
                     });
-                    
+
                     setHasSaved(true);
                     addBotMessage("Saved! 🎉");
                     setInitialState({ 
@@ -584,6 +729,13 @@
                 }
             }, [activeGoal, selectedCards, step, cardRulesDB, dbKeys]);
 
+            // Maintain card list order while in Step 3
+            useEffect(() => {
+                if (step === 3) {
+                    setDisplayCards([...selectedCards, ...availableCardNames.filter(c => !selectedCards.includes(c))]);
+                }
+            }, [step, availableCardNames]);
+
             return (
                 <div className="flex flex-col h-screen max-w-lg mx-auto bg-ios-gray shadow-2xl overflow-hidden relative sm:rounded-xl sm:my-8 sm:h-[90vh] sm:border border-gray-200">
                     <div className="bg-white/90 backdrop-blur-md border-b border-gray-200 p-4 flex items-center justify-between sticky top-0 z-20 h-14">
@@ -609,23 +761,28 @@
                             <div ref={step === 3 ? activeStepRef : null} className="mt-4 bg-white rounded-2xl p-4 shadow-sm fade-in mx-2 scroll-mt-24">
                                 <h3 className="font-bold text-gray-900 mb-3 text-lg">Your Wallet</h3>
                                 <div className="space-y-0 divide-y divide-gray-100 mb-4 max-h-60 overflow-y-auto pr-2">
-                                    {[...selectedCards, ...availableCardNames.filter(c => !selectedCards.includes(c))].map(card => (
-                                        <label key={`${card}-${selectedCards.includes(card)}`} className={`flex items-center justify-between py-3 cursor-pointer group card-item ${selectedCards.includes(card) ? 'bg-blue-50/50 px-2 rounded-lg -mx-2' : ''}`}>
+                                    {displayCards.map(card => (
+                                        <label key={card} className={`flex items-center justify-between py-3 cursor-pointer group card-item transition-all ${selectedCards.includes(card) ? 'bg-blue-50/50 px-2 rounded-lg -mx-2' : ''}`}>
                                             <span className="text-[15px] font-medium text-gray-800">{card}</span>
                                             <input type="checkbox" className="w-5 h-5 rounded-full border-gray-300 text-ios-blue focus:ring-0 ios-checkbox flex-shrink-0" checked={selectedCards.includes(card)} onChange={() => toggleCard(card)} />
                                         </label>
                                     ))}
                                 </div>
-                                <div className="flex gap-2 mb-4">
-                                    <input 
-                                        type="text" 
-                                        placeholder="Search other cards..." 
-                                        className="flex-1 bg-gray-100 rounded-xl px-4 py-2 text-[15px] outline-none" 
-                                        value={otherCardInput} 
-                                        onChange={(e) => setOtherCardInput(e.target.value)} 
-                                        onKeyDown={(e) => e.key === 'Enter' && addOtherCard()} 
-                                    />
-                                    <button onClick={addOtherCard} className="text-ios-blue font-semibold px-2">Add</button>
+                                <div className="mb-4">
+                                    <div className="flex gap-2">
+                                        <input 
+                                            type="text" 
+                                            placeholder="Suggest missing cards..." 
+                                            className="flex-1 bg-gray-100 rounded-xl px-4 py-2 text-[15px] outline-none" 
+                                            value={otherCardInput} 
+                                            onChange={(e) => setOtherCardInput(e.target.value)} 
+                                            onKeyDown={(e) => e.key === 'Enter' && addOtherCard()} 
+                                        />
+                                        <button onClick={addOtherCard} className="text-ios-blue font-semibold px-2">Add</button>
+                                    </div>
+                                    <p className="text-xs text-gray-400 mt-2 px-1">
+                                        *Suggestions won't affect your strategy yet.
+                                    </p>
                                 </div>
                                 <button onClick={finishCardSelection} className="w-full bg-ios-blue text-white py-3 rounded-xl font-bold">Continue</button>
                             </div>
@@ -683,94 +840,104 @@
                         )}
 
                         {/* Step 5: Read-Only Rules Preview */}
-                        {step === 5 && !isTyping && (
+                        {step === 5 && (
                             <div className="mt-4 pb-10 space-y-4 mx-2">
-                                <div ref={step === 5 && !hasSaved ? activeStepRef : null} className="bg-white rounded-2xl overflow-hidden shadow-sm scroll-mt-24">
-                                    <div className="p-4 border-b border-gray-100 flex justify-between items-center">
-                                        <div className="font-bold text-lg">Your Strategy</div>
-                                        <div className="flex gap-3">
-                                            <button onClick={() => setStep(3)} className="text-sm text-gray-500 hover:text-ios-blue">Cards</button>
-                                            <button onClick={() => setStep(4)} className="text-sm text-ios-blue font-medium">Goal</button>
+                                {isAnalyzing ? (
+                                    <div ref={activeStepRef} className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 fade-in scroll-mt-24 text-center">
+                                        <div className="flex items-center justify-center mb-5">
+                                            <i className="fas fa-circle-notch fa-spin text-4xl text-ios-blue"></i>
+                                        </div>
+                                        <h4 className="font-bold text-gray-900 text-lg mb-2">Building Strategy</h4>
+                                        <p className="text-[14px] text-gray-500 mb-6 h-5 transition-all duration-300">{analyzeText}</p>
+                                        
+                                        <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+                                            <div className="bg-ios-blue h-3 rounded-full transition-all duration-1000 ease-out" style={{ width: `${analyzeProgress}%` }}></div>
                                         </div>
                                     </div>
-                                    <div className="divide-y divide-gray-100">
-                                        {Object.entries(uiCardLogic).map(([category, data]) => {
-                                            let displayReason = data.reason;
-                                            let showExampleLabel = false;
-                                            let triggerName = "";
-
-                                            if (data.trigger && data.trigger !== category && data.trigger !== "Base") {
-                                                showExampleLabel = true;
-                                                triggerName = data.trigger;
-                                                if (!displayReason.toLowerCase().startsWith(data.trigger.toLowerCase())) {
-                                                    displayReason = `${data.trigger} • ${displayReason}`;
-                                                }
-                                            }
-                                            
-                                            return (
-                                                <div key={category} className="p-4 flex items-start justify-between gap-3">
-                                                    <div className="flex items-center gap-2 min-w-[30%]">
-                                                        <span className="text-xl">{CATEGORY_ICONS[category]}</span>
-                                                        <span className="font-semibold text-gray-900 text-[15px]">{category}</span>
-                                                    </div>
-                                                    <div className="text-right flex-1">
-                                                        {showExampleLabel && (
-                                                            <div className="text-[10px] text-gray-500 italic mb-0.5">Example: {triggerName}</div>
-                                                        )}
-                                                        <div className="font-bold text-ios-blue text-[15px]">{data.card}</div>
-                                                        <div className="text-[11px] text-gray-400 uppercase font-bold tracking-tight">{displayReason}</div>
-                                                    </div>
+                                ) : (
+                                    <>
+                                        <div ref={step === 5 && !hasSaved ? activeStepRef : null} className="bg-white rounded-2xl overflow-hidden shadow-sm scroll-mt-24 fade-in">
+                                            <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+                                                <div className="font-bold text-lg">Your Strategy</div>
+                                                <div className="flex gap-3">
+                                                    <button onClick={() => setStep(3)} className="text-sm text-gray-500 hover:text-ios-blue">Cards</button>
+                                                    <button onClick={() => setStep(4)} className="text-sm text-ios-blue font-medium">Goal</button>
                                                 </div>
-                                            );
-                                        })}
-                                    </div>
+                                            </div>
+                                            <div className="divide-y divide-gray-100">
+                                                {Object.entries(uiCardLogic).map(([category, data]) => {
+                                                    let displayReason = data.reason;
+                                                    let showExampleLabel = false;
+                                                    let triggerName = "";
 
-                                    {!hasSaved && (userMode === 'new' || (userMode === 'existing' && checkHasChanges())) && (
-                                        <div className="p-4 bg-gray-50">
-                                            <button onClick={confirmLogic} className="w-full bg-ios-green text-white py-3 rounded-xl font-bold shadow-sm">Confirm & Save</button>
-                                        </div>
-                                    )}
-                                </div>
+                                                    if (data.trigger && data.trigger !== category && data.trigger !== "Base") {
+                                                        showExampleLabel = true;
+                                                        triggerName = data.trigger;
+                                                        if (!displayReason.toLowerCase().startsWith(data.trigger.toLowerCase())) {
+                                                            displayReason = `${data.trigger} • ${displayReason}`;
+                                                        }
+                                                    }
+                                                    
+                                                    return (
+                                                        <div key={category} className="p-4 flex items-start justify-between gap-3">
+                                                            <div className="flex items-center gap-2 min-w-[30%]">
+                                                                <span className="text-xl">{CATEGORY_ICONS[category]}</span>
+                                                                <span className="font-semibold text-gray-900 text-[15px]">{category}</span>
+                                                            </div>
+                                                            <div className="text-right flex-1">
+                                                                {showExampleLabel && (
+                                                                    <div className="text-[10px] text-gray-500 italic mb-0.5">Example: {triggerName}</div>
+                                                                )}
+                                                                <div className="font-bold text-ios-blue text-[15px]">{data.card}</div>
+                                                                <div className="text-[11px] text-gray-400 uppercase font-bold tracking-tight">{displayReason}</div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
 
-                                {userMode === 'new' && hasSaved && (
-                                    <div ref={installShortcutRef} className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 fade-in scroll-mt-20 text-center">
-                                        <div className="flex items-center justify-center mb-6">
-                                            <div className="w-12 h-12 bg-ios-blue rounded-2xl flex items-center justify-center text-white text-2xl shadow-md"><i className="fas fa-bolt"></i></div>
+                                            {!hasSaved && (userMode === 'new' || (userMode === 'existing' && checkHasChanges())) && (
+                                                <div className="p-4 bg-gray-50">
+                                                    <button onClick={confirmLogic} className="w-full bg-ios-green text-white py-3 rounded-xl font-bold shadow-sm">Confirm & Save</button>
+                                                </div>
+                                            )}
                                         </div>
-                                        <h4 className="font-bold text-gray-900 text-xl mb-4">Install Shortcut</h4>
-                                        <div className="space-y-3 text-[15px] text-gray-600 mb-6 text-left leading-snug">
-                                            <p>1. Click <b>"Get Smart Pay"</b> to install.</p>
-                                            <p>2. In Shortcuts, go to <b>Library</b> ("1" below), and tap <b>"⚡️ Smart Pay"</b> ("2").</p>
-                                        </div>
-                                        <div className="mb-8 rounded-3xl overflow-hidden border border-gray-100 shadow-sm w-1/2 mx-auto">
-                                            <img src="https://raw.githubusercontent.com/pedroeisner/smartpay-public/main/images/shortcut-location-screen.png" alt="Guide" className="w-full h-auto" />
-                                        </div>
-                                        <div className="space-y-3">
-                                            <button onClick={handleGetShortcut} className="block w-full text-center bg-ios-blue text-white py-4 rounded-2xl font-bold text-[17px] shadow-lg active:opacity-90">
-                                                Get Smart Pay
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
 
-                                {userMode === 'existing' && isShortcutUpdated() && (
-                                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-ios-blue/30 text-center fade-in">
-                                        <p className="text-[15px] text-gray-800 font-bold mb-3">
-                                            {shortcutVersion ? `Update Available (v${shortcutVersion})` : "Update Available"}
-                                        </p>
-                                        {shortcutWhatsNew && (
-                                            <div className="mb-4 p-3 bg-blue-50 rounded-xl text-left border border-ios-blue/10">
-                                                <p className="text-[11px] font-bold text-ios-blue uppercase mb-1 tracking-wider">What's New</p>
-                                                <p className="text-[13px] text-gray-600 leading-tight">{shortcutWhatsNew}</p>
+                                        {userMode === 'new' && hasSaved && (
+                                            <div ref={installShortcutRef} className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 fade-in scroll-mt-20 text-center">
+                                                <div className="flex items-center justify-center mb-6">
+                                                    <div className="w-12 h-12 bg-ios-blue rounded-2xl flex items-center justify-center text-white text-2xl shadow-md"><i className="fas fa-bolt"></i></div>
+                                                </div>
+                                                <h4 className="font-bold text-gray-900 text-xl mb-4">Install Shortcut</h4>
+                                                <div className="space-y-3 text-[15px] text-gray-600 mb-6 text-left leading-snug">
+                                                    <p>1. Tap <b>"Get Smart Pay"</b> below to install the shortcut on your iPhone.</p>
+                                                    <p>2. To finish the setup, follow the instructions that we will send to your <b>email</b> in just a moment.</p>
+                                                </div>
+                                                <div className="space-y-3">
+                                                    <button onClick={handleGetShortcut} className="block w-full text-center bg-ios-blue text-white py-4 rounded-2xl font-bold text-[17px] shadow-lg active:opacity-90">
+                                                        Get Smart Pay
+                                                    </button>
+                                                </div>
                                             </div>
                                         )}
-                                        <p className="text-xs text-gray-500 mb-4">Please install it and choose "Replace" when prompted.</p>
-                                        <button onClick={handleGetShortcut} className="block w-full text-center bg-ios-blue text-white py-3 rounded-xl font-bold text-[15px] shadow-sm">Get Smart Pay</button>
-                                    </div>
-                                )}
 
-                                {/* Spacer to ensure scrolling "Install Shortcut" to the top is physically possible */}
-                                {hasSaved && <div className="h-[90vh]"></div>}
+                                        {userMode === 'existing' && isShortcutUpdated() && (
+                                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-ios-blue/30 text-center fade-in">
+                                                <p className="text-[15px] text-gray-800 font-bold mb-3">
+                                                    {shortcutVersion ? `Update Available (v${shortcutVersion})` : "Update Available"}
+                                                </p>
+                                                {shortcutWhatsNew && (
+                                                    <div className="mb-4 p-3 bg-blue-50 rounded-xl text-left border border-ios-blue/10">
+                                                        <p className="text-[11px] font-bold text-ios-blue uppercase mb-1 tracking-wider">What's New</p>
+                                                        <p className="text-[13px] text-gray-600 leading-tight">{shortcutWhatsNew}</p>
+                                                    </div>
+                                                )}
+                                                <p className="text-xs text-gray-500 mb-4">Please install it and choose "Replace" when prompted.</p>
+                                                <button onClick={handleGetShortcut} className="block w-full text-center bg-ios-blue text-white py-3 rounded-xl font-bold text-[15px] shadow-sm">Get Smart Pay</button>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
                             </div>
                         )}
                         <div ref={chatEndRef} />

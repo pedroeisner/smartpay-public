@@ -564,6 +564,13 @@
                 } catch (e) { addBotMessage("Error saving data."); }
             };
 
+            const handleSend = () => {
+                if (!inputText.trim()) return;
+                setMessages(p => [...p, { sender: 'user', text: inputText }]);
+                processInput(inputText);
+                setInputText("");
+            };
+
             // --- Effects ---
 
             useEffect(() => {

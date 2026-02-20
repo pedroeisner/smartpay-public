@@ -387,10 +387,10 @@
                 e.preventDefault();
                 if (shortcutLink) window.open(shortcutLink, '_blank');
                 if (userMode === 'new') {
-                    // Trigger email 10 seconds after clicking the button
+                    // Trigger email 1 second after clicking the button
                     setTimeout(() => {
                         sendWelcomeEmailViaGAS();
-                    }, 10000);
+                    }, 1000);
                 }
             };
 

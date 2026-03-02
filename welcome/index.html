@@ -365,6 +365,7 @@
             const sendWelcomeEmailViaGAS = async () => {
                 const regularCards = selectedCards.filter(c => !requestedCards.includes(c));
                 
+                // --- TRANSLATE GOAL TO HUMAN READABLE ---
                 let readableGoal = activeGoal;
                 if (activeGoal === 'cash') {
                     readableGoal = "Cashback";
@@ -401,9 +402,8 @@
                 e.preventDefault();
                 if (shortcutLink) window.open(shortcutLink, '_blank');
                 if (userMode === 'new') {
-                    setTimeout(() => {
-                        sendWelcomeEmailViaGAS();
-                    }, 10000);
+                    // Trigger email starts processing server-side via GAS
+                    sendWelcomeEmailViaGAS();
                 }
             };
 
@@ -789,10 +789,12 @@
                                                 </div>
                                                 <h4 className="font-bold text-gray-900 text-xl mb-4">Install Shortcut</h4>
                                                 <div className="space-y-3 text-[15px] text-gray-600 mb-6 text-left leading-snug">
-                                                    <p>1. Tap <b>"Get Smart Pay"</b> below to install the shortcut on your iPhone.</p>
+                                                    <p>1. Tap the button below to install the shortcut on your iPhone.</p>
                                                     <p>2. To finish the setup, follow the instructions that we will send to your <b>email</b> in just a moment.</p>
                                                 </div>
-                                                <button onClick={handleGetShortcut} className="block w-full text-center bg-ios-blue text-white py-4 rounded-2xl font-bold text-[17px] shadow-lg active:opacity-90">Get Smart Pay</button>
+                                                <button onClick={handleGetShortcut} className="block w-full text-center bg-ios-blue text-white py-4 rounded-2xl font-bold text-[17px] shadow-lg active:opacity-90">
+                                                    Get Shortcut > Install > Check Email
+                                                </button>
                                             </div>
                                         )}
 
